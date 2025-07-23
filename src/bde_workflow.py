@@ -56,8 +56,8 @@ def run_bde(smiles, outdir="bde_calc", generate_inputs=True, parse_outputs=True)
             label = frags["label"]
             smi1= frags["fragment1"]
             smi2 = frags["fragment2"]
-            write_species_files(smi1, f"{label}_1", outdir, charge=0, mult=2)
-            write_species_files(smi2, f"{label}_2", outdir, charge=0, mult=2)
+            write_species_files(smiles=smi1, name=f"{label}_1", outdir=outdir, charge=0, mult=2)
+            write_species_files(smiles=smi2, name=f"{label}_2", outdir=outdir, charge=0, mult=2)
 
     if parse_outputs:
         try:
