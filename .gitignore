@@ -38,3 +38,34 @@ coverage.xml
 htmlcov/
 .prof
 
+
+
+
+# Chem DATA FILES TO IGNORE
+# Common extensions for data outputs
+*.b
+*.p
+*.c
+*.db
+*.hess
+*.nmode
+*.zmat
+*.fd_ddipole
+*.drv.hess
+*.movecs
+*.cfock
+*.cphf_rhs
+*.cphf_sol
+
+# Ignore files with odd characters (like ^ in names)
+*^\*
+
+# Specific generated files (optional, if not covered above)
+parent.*
+ethanol_results
+methane-2
+methane_results
+
+
+
+
