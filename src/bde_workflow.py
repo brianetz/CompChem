@@ -61,16 +61,22 @@ def run_bde(smiles, outdir="bde_calc", generate_inputs=True, parse_outputs=True)
 
     if parse_outputs:
         try:
+            print("A")
             parent_data = parse_nwchem_output(f"{outdir}/parent.out")
             e0 = parent_data["energy"]
             z0 = parent_data["zpe"]
             h0 = parent_data["enthalpy"]
             s0 = parent_data["entropy"]
+            print("B")
         except:
+            print("C")
             print("Parent output missing or failed.")
             return {"species": all_species, "bde_data": [], "error": "parent output missing"}
 
-        fragments = break_bonds(smiles)
+        print("D")
+        fragments = break_bonds(smiles=smiles).get("fragments")
+        print("E")
+        print("NUMBER OF FRAGMENTS", len(fragments))
         for frags in fragments:
             print("Going to run run_individual_bde")
             individual_bond_data = run_individual_bde(e0, frags, h0, outdir, s0, z0)
