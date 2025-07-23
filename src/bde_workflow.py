@@ -61,25 +61,19 @@ def run_bde(smiles, outdir="bde_calc", generate_inputs=True, parse_outputs=True)
 
     if parse_outputs:
         try:
-            print("A")
-            parent_data = parse_nwchem_output(f"{outdir}/parent.out")
+            parent_data = parse_nwchem_output(filename=f"{outdir}/parent.out")
             e0 = parent_data["energy"]
             z0 = parent_data["zpe"]
             h0 = parent_data["enthalpy"]
             s0 = parent_data["entropy"]
-            print("B")
         except:
-            print("C")
             print("Parent output missing or failed.")
             return {"species": all_species, "bde_data": [], "error": "parent output missing"}
 
-        print("D")
         fragments = break_bonds(smiles=smiles).get("fragments")
-        print("E")
-        print("NUMBER OF FRAGMENTS", len(fragments))
         for frags in fragments:
             print("Going to run run_individual_bde")
-            individual_bond_data = run_individual_bde(e0, frags, h0, outdir, s0, z0)
+            individual_bond_data = run_individual_bde(e0=e0, frags=frags, h0=h0, outdir=outdir, s0=s0, z0=z0)
             bond_data.append(individual_bond_data)
 
     # save results
@@ -97,8 +91,8 @@ def run_bde(smiles, outdir="bde_calc", generate_inputs=True, parse_outputs=True)
 def run_individual_bde(e0, frags, h0, outdir, s0, z0):
     label = frags["label"]
     try:
-        frag1_data = parse_nwchem_output(f"{outdir}/{label}_1.out")
-        frag2_data = parse_nwchem_output(f"{outdir}/{label}_2.out")
+        frag1_data = parse_nwchem_output(filename=f"{outdir}/{label}_1.out")
+        frag2_data = parse_nwchem_output(filename=f"{outdir}/{label}_2.out")
         e1 = frag1_data["energy"]
         z1 = frag1_data["zpe"]
         h1 = frag1_data["enthalpy"]
@@ -114,7 +108,7 @@ def run_individual_bde(e0, frags, h0, outdir, s0, z0):
         bd_enthalpy = (e1 + h1 + e2 + h2) - (e0 + h0)
         # bd_enthalpy_kcal = bd_enthalpy * 627.509
         bd_free_energy = bd_enthalpy * 627.509 - (298.15 * (s2 + s1 - s0))  # G = H - T*S T=temperature
-        print("We are calling RUN_INDIVIDUAL_BDE  here!")
+        print("We are calling RUN_INDIVIDUAL_BDE!")
         return {
             "bond_id": label,
             "bd_energy": bd_energy * 627.509,

@@ -59,7 +59,7 @@ def main():
         job_results = run_nwchem_jobs(output_dir)
 
         # Step 3: wait until all output files exist
-        wait_result = wait_for_jobs(output_dir)
+        wait_result = wait_for_jobs(output_dir=output_dir)
 
         # Step 4: reparse results
         print("Parsing outputs...")

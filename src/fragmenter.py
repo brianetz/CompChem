@@ -22,7 +22,7 @@ def break_bonds(smiles):
         if bond.GetBondTypeAsDouble() > 1.9999:
             continue # skip double/triple bonds
         try:
-            frag = break_individual_bond(bond, mol)
+            frag = break_individual_bond(bond=bond, molecule=mol)
         except:
             frag = {}
         frags.append(frag)
@@ -30,14 +30,14 @@ def break_bonds(smiles):
     return {"fragments": frags}
 
 @flowcept_task
-def break_individual_bond(bond, mol):
+def break_individual_bond(bond, molecule):
     atom1 = bond.GetBeginAtom()
     atom2 = bond.GetEndAtom()
     idx1 = atom1.GetIdx()
     idx2 = atom2.GetIdx()
     bond_idx = bond.GetIdx()
     label = f"{atom1.GetSymbol()}-{atom2.GetSymbol()}_{bond_idx}"
-    rwmol = Chem.RWMol(mol)
+    rwmol = Chem.RWMol(molecule)
     rwmol.RemoveBond(idx1, idx2)
     # Set radicals at both ends
     for idx in [idx1, idx2]:
