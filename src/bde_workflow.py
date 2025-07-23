@@ -50,7 +50,7 @@ def run_bde(smiles, outdir="bde_calc", generate_inputs=True, parse_outputs=True)
     bond_data = []
 
     if generate_inputs:
-        all_species["parent"] = write_species_files(simles=smiles, name="parent", outdir=outdir, charge=0, mult=1) 
+        all_species["parent"] = write_species_files(smiles=smiles, name="parent", outdir=outdir, charge=0, mult=1)
         fragments = break_bonds(smiles).get('fragments')
         for frags in fragments:
             label = frags["label"]
