@@ -1,0 +1,40 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual environments
+venv/
+.env/
+.venv/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# VS Code settings
+.vscode/
+
+# PyCharm settings
+.idea/
+
+# macOS
+.DS_Store
+
+# Backup / editor swap files
+*.swp
+*.bak
+*~
+
+# Test output (optional)
+*.log
+pytest_cache/
+
+# MyPy / coverage / profiling (optional)
+.mypy_cache/
+coverage.xml
+htmlcov/
+.prof
+
