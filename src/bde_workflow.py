@@ -8,9 +8,9 @@ from flowcept import Flowcept, flowcept_task
 
 @flowcept_task
 def write_species_files(smiles, name, outdir, charge, mult):
-    mol_data = get_lowest_energy_conformer(smiles)
+    mol_data = get_lowest_energy_conformer(smiles=smiles, num_confs=20)
     mol = mol_data["lowest_energy_conformer"]
-    xyz_data = mol_to_xyz(mol)
+    xyz_data = mol_to_xyz(mol=mol)
     xyz_str = xyz_dict_to_str(xyz_data)
 
     # Set the correct multiplicity for the molecule

@@ -4,7 +4,7 @@ from rdkit.Chem import AllChem
 from flowcept import Flowcept, flowcept_task
 
 @flowcept_task
-def get_lowest_energy_conformer(smiles, num_confs=20):
+def get_lowest_energy_conformer(smiles, num_confs=100):
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         raise ValueError(f"Invalid SMILES: '{smiles}'")
