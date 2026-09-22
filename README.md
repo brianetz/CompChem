@@ -48,7 +48,7 @@ This installs RDKit, ASE, PySCF, cclib, Parsl, `tblite[ase]` (GFN2-xTB), `pymol-
 For the LLM-planned path (anything using `--question`), set an Anthropic API key in your shell:
 
 ```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
+export ANTHROPIC_API_KEY="<key>"
 ```
 
 ## Usage
