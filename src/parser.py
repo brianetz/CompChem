@@ -1,5 +1,5 @@
 import re
-from flowcept import Flowcept, flowcept_task
+from storage.flowcept_store import flowcept_task
 
 @flowcept_task
 def parse_nwchem_output(filename):

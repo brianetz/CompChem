@@ -1,5 +1,5 @@
 from rdkit import Chem
-from flowcept import Flowcept, flowcept_task
+from storage.flowcept_store import flowcept_task
 
 @flowcept_task
 def break_bonds(smiles):

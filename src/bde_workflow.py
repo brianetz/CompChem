@@ -4,7 +4,7 @@ from conformer import get_lowest_energy_conformer
 from nwchem import mol_to_xyz, xyz_dict_to_str, write_nwchem_input
 from parser import parse_nwchem_output
 import pandas as pd
-from flowcept import Flowcept, flowcept_task
+from storage.flowcept_store import flowcept_task
 
 @flowcept_task
 def write_species_files(smiles, name, outdir, charge, mult):
@@ -66,9 +66,9 @@ def run_bde(smiles, outdir="bde_calc", generate_inputs=True, parse_outputs=True)
             z0 = parent_data["zpe"]
             h0 = parent_data["enthalpy"]
             s0 = parent_data["entropy"]
-        except:
-            print("Parent output missing or failed.")
-            return {"species": all_species, "bde_data": [], "error": "parent output missing"}
+        except Exception as exc:
+            print(f"Parent output missing or failed: {exc}")
+            return {"species": all_species, "bde_data": [], "error": f"parent output missing or failed: {exc}"}
 
         fragments = break_bonds(smiles=smiles).get("fragments")
         for frags in fragments:
@@ -103,24 +103,40 @@ def run_individual_bde(e0, frags, h0, outdir, s0, z0):
         h2 = frag2_data["enthalpy"]
         s2 = frag2_data["entropy"]
 
+        # Fail loudly (with a specific reason) rather than letting a missing
+        # value silently blow up into the generic except-clause below, which
+        # used to mask *every* kind of failure behind the same -1 sentinel.
+        missing = [
+            name for name, val in [
+                ("frag1_zpe", z1), ("frag1_enthalpy", h1), ("frag1_entropy", s1),
+                ("frag2_zpe", z2), ("frag2_enthalpy", h2), ("frag2_entropy", s2),
+                ("parent_zpe", z0), ("parent_enthalpy", h0), ("parent_entropy", s0),
+            ] if val is None
+        ]
+        if missing:
+            raise ValueError(f"missing thermochemistry value(s): {', '.join(missing)}")
+
         bd_energy = (e1 + z1 + e2 + z2) - (e0 + z0)
-        # bd_energy_kcal = bd_energy * 627.509
         bd_enthalpy = (e1 + h1 + e2 + h2) - (e0 + h0)
-        # bd_enthalpy_kcal = bd_enthalpy * 627.509
         bd_free_energy = bd_enthalpy * 627.509 - (298.15 * (s2 + s1 - s0))  # G = H - T*S T=temperature
-        print("We are calling RUN_INDIVIDUAL_BDE!")
         return {
             "bond_id": label,
             "bd_energy": bd_energy * 627.509,
             "bd_enthalpy": bd_enthalpy * 627.509,
-            "bd_free_energy": bd_free_energy
-        }  # "bd_energy_hartree": bd_energy, -- in case you want to print hartree value.
-    except:
-        print(f"Output missing for bond {label}. Skipping...")
+            "bd_free_energy": bd_free_energy,
+            "status": "ok",
+            "error": None,
+        }
+    except Exception as exc:
+        # None (not -1) so a failed row is unmistakably missing data rather
+        # than a plausible-looking-but-fake number, and status/error say why.
+        print(f"BDE calc failed for bond {label}: {exc}")
         return {
             "bond_id": label,
-            "bd_energy": -1,
-            "bd_enthalpy": -1,
-            "bd_free_energy": -1
-        }  # "
+            "bd_energy": None,
+            "bd_enthalpy": None,
+            "bd_free_energy": None,
+            "status": "failed",
+            "error": str(exc),
+        }
 

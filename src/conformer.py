@@ -1,7 +1,7 @@
 import numpy as np
 from rdkit import Chem
 from rdkit.Chem import AllChem
-from flowcept import Flowcept, flowcept_task
+from storage.flowcept_store import flowcept_task
 
 @flowcept_task
 def get_lowest_energy_conformer(smiles, num_confs=100):
