@@ -16,7 +16,7 @@ This repo is an agentic computational chemistry tool: a plan → approve → exe
 
 Four real Academy actor agents, orchestrated by `agents/run_agentic_campaign.py`:
 
-1. **PlannerAgent** - a bare SMILES gets a rule-based spec; a natural-language `--question` gets a real Claude API call that reasons about what's needed (e.g. recognizing that a bond-dissociation-energy question needs a parent *and* fragments, with correct charge/multiplicity - not just one molecule).
+1. **PlannerAgent** - a bare SMILES gets a rule-based spec; a natural-language `--question` gets a real LLM call (Anthropic Claude by default, or a local Ollama model with `--ollama`) that reasons about what's needed (e.g. recognizing that a bond-dissociation-energy question needs a parent *and* fragments, with correct charge/multiplicity - not just one molecule).
 2. **Human approval gate 1** - pauses before anything computes. Approve or abort.
 3. **ExecutorAgent** - dispatches to a pluggable skill under `src/skills/` (currently `single_point`, `bde`): GFN2-xTB (xtb) prescreen optimization, then a DFT refinement (PySCF by default; NWChem is wired in as an ASE-calculator alternate but not yet planner-selectable or runtime-validated - don't imply it works end-to-end yet).
 4. **CriticAgent** - PASS / WARN / FAIL on convergence, missing energies, spin-state sanity.
@@ -44,9 +44,19 @@ Natural-language question, LLM-planned, gates live (needs `ANTHROPIC_API_KEY` se
 python -m agents.run_agentic_campaign --question "What's the O-H bond dissociation energy for water in kcal/mol, using a cheap xtb prescreen and a DFT refinement?" --model claude-haiku-4-5-20251001
 ```
 
+Same, but planned locally via Ollama instead (no API key, needs a running `ollama serve` with the model already pulled):
+```bash
+python -m agents.run_agentic_campaign --question "..." --ollama --model llama3.1
+```
+
+Same again, but planned via the logged-in Claude Code CLI instead (no API key, needs Claude Code installed and logged in - authenticates via that login, not `ANTHROPIC_API_KEY`):
+```bash
+python -m agents.run_agentic_campaign --question "..." --claude-cli
+```
+
 At the gates: plan gate is `y`/`n`; post-analysis gate is `a` (approve) / `r` (reprioritize, then feedback text) / `n` (new_experiment, then a new question or SMILES) / `x` (abort).
 
-Flags: `--question "..."`, `--model <name>` (default `claude-sonnet-5`, or `$ANTHROPIC_MODEL`), `--auto-approve` (skip both gates), `--max-replan-rounds <N>` (default 2).
+Flags: `--question "..."`, `--ollama` (use a local Ollama model instead of the Anthropic API for LLM-backed planning), `--claude-cli` (use the logged-in Claude Code CLI instead - mutually exclusive with `--ollama`), `--model <name>` (default `claude-sonnet-5`/`$ANTHROPIC_MODEL` for Anthropic/`--claude-cli`, or with `--ollama`, `llama3.1`/`$OLLAMA_MODEL`), `--auto-approve` (skip both gates), `--max-replan-rounds <N>` (default 2).
 
 Output: terminal shows the spec/energies/verdict live; `agentic_campaign_report.md` + `report_structures/*.png` (both gitignored, regenerated per run) are the human-facing artifacts; `flowcept_buffer.jsonl` (gitignored) holds full provenance, inspectable with `python verify_agent_provenance.py`.
 
@@ -66,3 +76,6 @@ New module under `src/skills/` exposing `NAME`, `DESCRIPTION`, `run(spec)`, `rev
 - A run seems to hang with no output → an approval gate is waiting on `input()` at the terminal (gates are on by default); either respond to the prompt or re-run with `--auto-approve`.
 - `--model <alias>` not found → try the fully-dated model name (e.g. `claude-haiku-4-5-20251001` instead of `claude-haiku-4-5`).
 - Missing structure images in the report → `pymol` isn't on `PATH` in this environment (the renderer shells out to it); check `which pymol`, image rendering fails gracefully (report still writes, just without that image) with a one-line diagnostic printed to the terminal.
+- `--ollama` run raises "local Ollama model did not call the emit_campaign_spec tool" or fails validation after 2 attempts → unlike Claude's forced `tool_choice`, Ollama's tool-calling isn't enforced - a smaller/weaker local model can ignore the "always call the tool" instruction, or return the tool call missing a required field (e.g. `basis`/`xc`). Try a model documented as reliably tool-capable (llama3.1, qwen2.5); the first `--ollama` call against a not-yet-loaded model also pays a one-time load cost (tens of seconds to minutes depending on size) before it responds at all, which can look like a hang.
+- `--claude-cli` run raises "`claude` CLI not found on PATH" → Claude Code itself isn't installed/on PATH in this environment; this backend shells out to `claude -p`, it doesn't reimplement the API call.
+- `--claude-cli` run raises "claude -p did not return valid JSON" → `claude -p` has no native tool-calling (no `tool_choice`, no `tools=`), so the schema is conveyed as plain-text instructions and the reply is parsed as raw JSON; a weaker/smaller model picked via `--model` may drift from that instruction more than `claude-sonnet-5` does. This is also billed against/counts toward whichever Claude Code login is active - it isn't free just because no `ANTHROPIC_API_KEY` is set.

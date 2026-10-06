@@ -25,6 +25,8 @@ Usage:
     python -m agents.run_agentic_campaign CCO                  # explicit SMILES, rule-based planner
     python -m agents.run_agentic_campaign --question "..."     # natural-language question, LLM-backed planner (Phase 5)
         [--model claude-opus-5]                                # optional: override ANTHROPIC_MODEL for this run
+        [--ollama]                                             # use a local Ollama model instead of the Anthropic API
+        [--claude-cli]                                         # use the logged-in Claude Code CLI instead of the Anthropic API
         [--auto-approve]                                       # skip both human-approval gates (Phase 10) - scripted/test runs
         [--max-replan-rounds 2]                                # cap on 'reprioritize' round-trips through the planner (default: 2)
 
@@ -33,8 +35,25 @@ prompt: once after planning, once after the critic's review. Existing
 scripts/tests that ran this non-interactively need --auto-approve added to
 keep running unattended, exactly as before this feature existed.
 
-The LLM-backed path requires `pip install anthropic` and an ANTHROPIC_API_KEY
-in the environment, and makes a real (billed) network call to the Claude API.
+The LLM-backed path (--question, or 'reprioritize' at the post-analysis
+gate) needs one of three backends (--ollama and --claude-cli are mutually
+exclusive; neither given means the Anthropic default):
+  - Anthropic (default): `pip install anthropic` and an ANTHROPIC_API_KEY
+    in the environment. Makes a real (billed) network call to the Claude API.
+  - Ollama (--ollama flag): `pip install ollama` and a local `ollama serve`
+    running, with the chosen model already pulled (`ollama pull llama3.1`
+    or similar). No API key, no network call, no billing - see
+    llm/planner_llm.py's module docstring for the tool-calling caveats of
+    this path (it's less reliable than Claude's forced tool_choice).
+  - Claude Code CLI (--claude-cli flag): Claude Code itself installed and
+    logged in (`claude` on PATH). Shells out to `claude -p`, authenticating
+    with the CLI's own login instead of ANTHROPIC_API_KEY - for a user with
+    a Claude Code subscription but no separate API key. Still counts
+    against that login's usage/plan, and is slower than a direct API call
+    since each attempt spawns a real (tool-less) Claude Code session - see
+    llm/planner_llm.py's module docstring for how the tool schema is
+    conveyed (plain-text instructions, not native tool-calling) and its
+    own failure modes.
 """
 from __future__ import annotations
 
@@ -70,7 +89,29 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model",
         default=None,
-        help="Override the ANTHROPIC_MODEL default for --question runs.",
+        help="Override the default model for --question runs: the ANTHROPIC_MODEL "
+        "default (used for both the Anthropic and --claude-cli backends), or "
+        "with --ollama, the OLLAMA_MODEL default.",
+    )
+    backend_group = parser.add_mutually_exclusive_group()
+    backend_group.add_argument(
+        "--ollama",
+        action="store_true",
+        help="Use a local Ollama model instead of the Anthropic Claude API for "
+        "LLM-backed planning (--question, and any 'reprioritize' replanning). "
+        "No ANTHROPIC_API_KEY needed. Requires `pip install ollama` and a "
+        "running `ollama serve` with the model already pulled (default model: "
+        "llama3.1, override with --model or $OLLAMA_MODEL).",
+    )
+    backend_group.add_argument(
+        "--claude-cli",
+        action="store_true",
+        help="Use the logged-in Claude Code CLI (`claude -p`) instead of the "
+        "Anthropic Claude API for LLM-backed planning. No ANTHROPIC_API_KEY "
+        "needed - authenticates via Claude Code's own login instead. Requires "
+        "Claude Code installed and logged in (`claude` on PATH). Still counts "
+        "against that login's usage/plan, and is slower than a direct API "
+        "call (see module docstring).",
     )
     parser.add_argument(
         "--auto-approve",
@@ -108,6 +149,13 @@ def _abort_report(
 
 
 async def run_campaign(args: argparse.Namespace) -> str:
+    if args.ollama:
+        backend = "ollama"
+    elif args.claude_cli:
+        backend = "claude_cli"
+    else:
+        backend = "anthropic"
+
     async with await Manager.from_exchange_factory(
         factory=LocalExchangeFactory(),
         executors=ThreadPoolExecutor(),
@@ -119,7 +167,7 @@ async def run_campaign(args: argparse.Namespace) -> str:
 
         if args.question:
             spec = await planner.plan_campaign_from_prompt(
-                question=args.question, model=args.model
+                question=args.question, model=args.model, backend=backend
             )
         else:
             spec = await planner.plan_campaign(smiles=args.smiles or "O")
@@ -162,7 +210,7 @@ async def run_campaign(args: argparse.Namespace) -> str:
             if analysis_decision.action == "new_experiment":
                 if analysis_decision.new_question:
                     spec = await planner.plan_campaign_from_prompt(
-                        question=analysis_decision.new_question, model=args.model
+                        question=analysis_decision.new_question, model=args.model, backend=backend
                     )
                 else:
                     spec = await planner.plan_campaign(smiles=analysis_decision.new_smiles or "O")
@@ -177,7 +225,7 @@ async def run_campaign(args: argparse.Namespace) -> str:
                     break
                 spec = await planner.replan_campaign(
                     previous_spec=spec, previous_results=results, verdict=verdict,
-                    feedback=analysis_decision.feedback or "", model=args.model,
+                    feedback=analysis_decision.feedback or "", model=args.model, backend=backend,
                 )
                 print("Planner spec (revised):", spec)
                 continue

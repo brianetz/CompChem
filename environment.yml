@@ -51,11 +51,13 @@ dependencies:
       - flowcept>=1.0.2  # ORNL provenance capture (PyPI: flowcept). >=1.0.2 floor is for Phase 9's agent-decision provenance (FlowceptTask + PROV_AGENT, storage/agent_provenance.py) - confirmed present in 1.0.2/1.0.3, not a new dependency, just a version floor.
       - academy-py      # Globus Labs federated agent framework (PyPI: academy-py)
       # NOTE (Phase 5, 2026-09-15): gpt-oss:20b via local Ollama didn't run
-      # locally on this Mac; the LLM planning layer uses the hosted Anthropic
-      # Claude API instead (see src/llm/planner_llm.py). `ollama` is left here
-      # in case local serving is revisited later (e.g. a smaller model, or
-      # for the HPC phase where the Claude API may not be reachable).
-      - ollama          # Python client for local Ollama server (not currently used - see note above)
+      # locally on this Mac, so the LLM planning layer defaulted to the
+      # hosted Anthropic Claude API instead (see src/llm/planner_llm.py).
+      # Later re-added as an opt-in second backend (`backend="ollama"` /
+      # CLI `--ollama`, run_agentic_campaign.py) for offline/no-API-key use
+      # against whatever model is already pulled locally - no longer
+      # unused, just not the default.
+      - ollama          # Python client for local Ollama server (optional --ollama backend)
       - anthropic       # Anthropic Claude API SDK - Phase 5 LLM planning backend. Needs ANTHROPIC_API_KEY in the environment (never commit a key).
       - tblite[ase]     # GFN2-xTB Python bindings + ASE calculator (PyPI-only, prebuilt macOS wheels)
 

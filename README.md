@@ -45,11 +45,14 @@ conda activate compchem-agent
 
 This installs RDKit, ASE, PySCF, cclib, Parsl, `tblite[ase]` (GFN2-xTB), `pymol-open-source`, Flowcept, `academy-py`, and the `anthropic` SDK. The macOS OpenMP environment variables xtb/PySCF need (`KMP_DUPLICATE_LIB_OK`, `OMP_STACKSIZE`, `OMP_NUM_THREADS`) are baked into the environment's own activate hook — nothing to set by hand.
 
-For the LLM-planned path (anything using `--question`), set an Anthropic API key in your shell:
+For the LLM-planned path (anything using `--question`, or "reprioritize" at the post-analysis gate), pick one of three backends (`--ollama` and `--claude-cli` are mutually exclusive; neither given means the Anthropic default):
 
-```bash
-export ANTHROPIC_API_KEY="<key>"
-```
+- **Anthropic (default)** — the hosted Claude API. Set an API key in your shell:
+  ```bash
+  export ANTHROPIC_API_KEY="<key>"
+  ```
+- **Ollama (`--ollama` flag)** — a local model via a running `ollama serve`, no API key and no network call. Pull a tool-calling-capable model first (`ollama pull llama3.1` or similar), then pass `--ollama` (optionally `--model <name>` to pick which pulled model to use, default `llama3.1` / `$OLLAMA_MODEL`). Local models honor the tool-call schema less reliably than Claude does, so expect the bounded self-correction retry to kick in more often — see `src/llm/planner_llm.py`'s module docstring for details.
+- **Claude Code CLI (`--claude-cli` flag)** — no API key either, but for a different reason: it shells out to `claude -p` and authenticates with your existing Claude Code login instead. Just needs Claude Code itself installed and logged in. Still counts against that login's usage/plan (not free), and is slower per call than a direct API request since each attempt spawns a real (tool-less) Claude Code session — see `src/llm/planner_llm.py`'s module docstring for how it fakes structured output (plain-text JSON instructions, since `claude -p` has no native tool-calling).
 
 ## Usage
 
@@ -77,6 +80,18 @@ python -m agents.run_agentic_campaign "CCO"   # ethanol
 python -m agents.run_agentic_campaign --question "What's the O-H bond dissociation energy for water in kcal/mol, using a cheap xtb prescreen and a DFT refinement?" --model claude-haiku-4-5-20251001
 ```
 
+Same question, planned locally via Ollama instead (no API key):
+
+```bash
+python -m agents.run_agentic_campaign --question "What's the O-H bond dissociation energy for water in kcal/mol, using a cheap xtb prescreen and a DFT refinement?" --ollama --model llama3.1
+```
+
+Same question again, planned via the logged-in Claude Code CLI instead (also no API key):
+
+```bash
+python -m agents.run_agentic_campaign --question "What's the O-H bond dissociation energy for water in kcal/mol, using a cheap xtb prescreen and a DFT refinement?" --claude-cli
+```
+
 At each gate, respond at the prompt:
 - Plan gate: `y` (approve) or `n` (abort).
 - Post-analysis gate: `a` (approve), `r` (reprioritize, then give feedback text), `n` (new experiment, then give a new question or SMILES), or `x` (abort).
@@ -85,8 +100,10 @@ At each gate, respond at the prompt:
 
 | Flag | Effect |
 |---|---|
-| `--question "..."` | Plan via the Claude API instead of a bare SMILES |
-| `--model <name>` | Override the Claude model used for planning (defaults to `claude-sonnet-5`, or `$ANTHROPIC_MODEL` if set) |
+| `--question "..."` | Plan via an LLM (Anthropic by default, or Ollama/Claude-Code-CLI with `--ollama`/`--claude-cli`) instead of a bare SMILES |
+| `--ollama` | Use a local Ollama model instead of the Anthropic Claude API for LLM-backed planning — no API key needed |
+| `--claude-cli` | Use the logged-in Claude Code CLI (`claude -p`) instead of the Anthropic Claude API — no API key needed, but uses the CLI's own login |
+| `--model <name>` | Override the planning model (defaults to `claude-sonnet-5`/`$ANTHROPIC_MODEL` for Anthropic/`--claude-cli`, or with `--ollama`, `llama3.1`/`$OLLAMA_MODEL`) |
 | `--auto-approve` | Skip both human approval gates (for scripted/unattended runs) |
 | `--max-replan-rounds <N>` | Cap on how many times "reprioritize" can send the spec back through the planner (default 2) |
 

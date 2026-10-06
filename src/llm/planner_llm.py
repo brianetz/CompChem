@@ -1,5 +1,7 @@
 """
-LLM-backed campaign planning (Phase 5) via the Anthropic Claude API.
+LLM-backed campaign planning (Phase 5) via the Anthropic Claude API, with
+two later-added alternate backends: a local-Ollama backend and a
+Claude-Code-CLI backend (see "Backend decision" below for both).
 
 Turns a natural-language research question into a structured campaign spec.
 For the 'single_point' analysis this matches the flat shape
@@ -15,9 +17,9 @@ choosable by the planner, with no prompt edit required in this file. What
 IS still hand-maintained here is the input SHAPE (flat 'single_point'-like
 vs nested 'parent + fragments'-like) - a future skill needing a genuinely
 different shape (neither of those two) will need a new branch in
-generate_campaign_spec_llm below, even though ExecutorAgent/CriticAgent/
-ReporterAgent themselves need no changes regardless (see architecture plan
-Sec.16 for this known boundary).
+_spec_from_raw below, even though ExecutorAgent/CriticAgent/ReporterAgent
+themselves need no changes regardless (see architecture plan Sec.16 for this
+known boundary).
 
 Backend decision (2026-09-15): gpt-oss:20b via local Ollama (the original
 Phase 5 plan) couldn't be gotten running locally; switched to a hosted API
@@ -29,15 +31,62 @@ Frontier/Defiant compute nodes likely won't have - the HPC phase may need
 to revisit this (e.g. call the API from a login/gateway node, or fall back
 to a local model there).
 
-Requires:
+Ollama backend (later addition): re-added as an opt-in `backend="ollama"`
+path (CLI: `--ollama`, agents/run_agentic_campaign.py), for offline/no-API-
+key use with whatever model the caller already has pulled locally. Unlike
+Anthropic, Ollama's tool-calling API has no forced `tool_choice` - the model
+decides whether to call a tool at all, so a model that ignores the
+instruction to always call `emit_campaign_spec` surfaces as a ValueError
+("did not call the tool") rather than silently falling back to free text.
+Pick a model documented as tool-call-capable (e.g. llama3.1, qwen2.5) and
+expect it to need the same bounded self-correction retries, or more, that
+Claude occasionally needs (see below) - smaller local models are more prone
+to malformed tool calls, not less.
+
+Claude-Code-CLI backend (later addition): a third opt-in `backend=
+"claude_cli"` path (CLI: `--claude-cli`), for a user with Claude Code
+installed and logged in but no separate ANTHROPIC_API_KEY - it shells out
+to `claude -p` (the CLI's own headless/print mode), which authenticates
+with the CLI's existing login (subscription/OAuth) rather than reading
+ANTHROPIC_API_KEY from the environment. `claude -p` has no native
+tool-calling of its own (no tool_choice, no tools= param), so the tool
+schema is instead spelled out as plain-text instructions
+(_json_output_instructions) and the reply is parsed as raw JSON
+(_extract_json_object) - a real test call came back wrapped in a markdown
+code fence despite being told not to, so that gets stripped rather than
+failing. `--allowedTools ""` (an empty whitelist) keeps the spawned CLI
+session from touching the filesystem or running anything - it's used
+purely as a text-completion engine here, not as an agent. Conversation
+state for the bounded retry lives server-side via `--resume <session_id>`
+rather than replayed messages, since that's how `claude -p` sessions work.
+Worth knowing before reaching for this backend: it still counts against
+whatever Claude Code plan/usage the CLI is logged into (not free just
+because no API key is set), and each call spawns a real (if tool-less)
+Claude Code session, so it's slower than a direct API call.
+
+Requires (Anthropic backend, the default):
     pip install anthropic
     export ANTHROPIC_API_KEY=...   (never hardcode a key in code or files)
 
-Model choice is configurable via the ANTHROPIC_MODEL env var. Default here
-is claude-sonnet-5 (a strong balance of reasoning quality and latency/cost
-for this small, structured task) - see
-https://docs.claude.com/en/docs/about-claude/models for the current model
-lineup if this default ever needs updating.
+Requires (Ollama backend, `backend="ollama"` / CLI `--ollama`):
+    pip install ollama
+    A running local `ollama serve`, with the chosen model already pulled
+    (`ollama pull llama3.1` or similar).
+
+Requires (Claude-Code-CLI backend, `backend="claude_cli"` / CLI
+`--claude-cli`):
+    Claude Code itself installed and logged in (`claude` on PATH,
+    `claude /login` already run) - no ANTHROPIC_API_KEY needed.
+
+Model choice is configurable via the ANTHROPIC_MODEL env var (Anthropic or
+Claude-Code-CLI backend - both select a Claude model by the same names) or
+the OLLAMA_MODEL env var (Ollama backend), or the `--model` CLI flag either
+way. Default here is claude-sonnet-5 for Anthropic/Claude-Code-CLI (a
+strong balance of reasoning quality and latency/cost for this small,
+structured task - see https://docs.claude.com/en/docs/about-claude/models
+for the current model lineup if this default ever needs updating) and
+llama3.1 for Ollama (a widely-available tool-calling-capable default; swap
+for whatever's already pulled locally).
 
 Phase 10 (2026-09-17) adds a sibling function,
 generate_revised_campaign_spec_llm, used by PlannerAgent.replan_campaign
@@ -46,7 +95,8 @@ when a human chooses 'reprioritize' at the post-analysis approval gate
 schema, bounded self-correction retry, and output shape - the only real
 difference is the initial user message, which embeds the previous
 spec/results/verdict plus the human's free-text feedback instead of a
-bare question string.
+bare question string. Both functions delegate their actual backend call
+and retry loop to the shared `_generate_spec_via_llm` below.
 
 Bounded self-correction (found 2026-09-15, real run): a forced tool call
 does not GUARANTEE the model actually fills in every field the system
@@ -54,17 +104,18 @@ prompt asks for - a real run against a cheaper/faster model alias returned
 analysis_type='bde' with an empty 'fragments' list, despite the prompt
 saying that's required, and despite JSON-schema hints in the tool
 definition (see _build_tool_schema). Rather than crash on the first
-mistake, generate_campaign_spec_llm now gives the model exactly one
-corrective turn: it sends the bad tool call back as an is_error tool_result
-naming exactly what was missing, and lets the model retry once, still
-forced through tool_choice. Only a second consecutive failure raises. This
-mirrors the "cap recovery attempts" pitfall (architecture plan Sec.7) -
-bounded at 2 total attempts, not unbounded retrying.
+mistake, _generate_spec_via_llm now gives the model exactly one corrective
+turn: it sends the bad tool call back as a tool-error message and lets the
+model retry once, still asked to call the same tool. Only a second
+consecutive failure raises. This mirrors the "cap recovery attempts"
+pitfall (architecture plan Sec.7) - bounded at 2 total attempts, not
+unbounded retrying.
 """
 from __future__ import annotations
 
 import json
 import os
+import re
 from typing import Any
 
 import anthropic
@@ -74,6 +125,7 @@ from storage.agent_provenance import agent_llm_invocation_task
 from skills import list_skills
 
 _DEFAULT_MODEL = "claude-sonnet-5"
+_DEFAULT_OLLAMA_MODEL = "llama3.1"
 _MAX_ATTEMPTS = 2
 
 
@@ -212,8 +264,8 @@ def _require_species_dict(obj: Any, what: str) -> dict:
     analysis_type='bde' with 'parent' as a bare SMILES string instead of an
     object, crashing deep in dict-key access with an opaque TypeError.
     Raising ValueError here instead routes the mistake through the same
-    bounded self-correction retry in generate_campaign_spec_llm already
-    used for the missing-fragments case, rather than crashing the run."""
+    bounded self-correction retry in _generate_spec_via_llm already used
+    for the missing-fragments case, rather than crashing the run."""
     if not isinstance(obj, dict) or "smiles" not in obj:
         raise ValueError(
             f"{what} must be an object with a 'smiles' field (and "
@@ -225,11 +277,26 @@ def _require_species_dict(obj: Any, what: str) -> dict:
 def _spec_from_raw(raw: dict[str, Any], question: str, resolved_model: str) -> dict:
     """Build the final campaign-spec dict from one validated tool-call
     payload. Raises ValueError if a fragments-requiring analysis_type came
-    back with no fragments, or if 'parent'/a fragment entry isn't shaped as
-    the expected object - the caller (generate_campaign_spec_llm) decides
-    whether that's worth a corrective retry."""
+    back with no fragments, if 'parent'/a fragment entry isn't shaped as
+    the expected object, or if 'basis'/'xc' are missing - the caller
+    (_generate_spec_via_llm) decides whether that's worth a corrective
+    retry.
+
+    Bug found 2026-09-24 (Ollama backend): the tool schema marks 'basis'
+    and 'xc' required, but unlike Anthropic's forced tool_choice, Ollama's
+    tool-calling has no hard schema enforcement - a real run against a
+    local model returned a valid-looking BDE tool call with both fields
+    simply absent. The original code read raw['basis']/raw['xc'] directly,
+    which raised a bare KeyError that bypassed the bounded self-correction
+    retry below (it only catches ValueError) and crashed the whole call.
+    Checking for them explicitly here, before either return branch, routes
+    that failure through the same retry as every other malformed-tool-call
+    case instead."""
     analysis_type = raw.get("analysis_type", "single_point")
     parent = _require_species_dict(raw.get("parent"), "'parent'")
+    missing = [field for field in ("basis", "xc") if not raw.get(field)]
+    if missing:
+        raise ValueError(f"missing required field(s): {', '.join(missing)}")
 
     if analysis_type == "single_point":
         return {
@@ -282,9 +349,307 @@ def _spec_from_raw(raw: dict[str, Any], question: str, resolved_model: str) -> d
     }
 
 
+def _resolve_model(backend: str, model: str | None) -> str:
+    if backend == "ollama":
+        return model or os.environ.get("OLLAMA_MODEL", _DEFAULT_OLLAMA_MODEL)
+    return model or os.environ.get("ANTHROPIC_MODEL", _DEFAULT_MODEL)
+
+
+def _anthropic_attempt(
+    model: str, system_prompt: str, tools: list[dict], messages: list[dict[str, Any]]
+) -> tuple[dict, Any, Any]:
+    """One Claude tool-call attempt. Returns (raw tool input, the
+    assistant-turn entry to replay into history on a retry, an opaque
+    'retry ref' - here the tool_use_id the retry's tool_result must echo)."""
+    client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from the environment
+    response = client.messages.create(
+        model=model,
+        max_tokens=1024,
+        system=system_prompt,
+        tools=tools,
+        tool_choice={"type": "tool", "name": "emit_campaign_spec"},
+        messages=messages,
+    )
+    tool_use = next(block for block in response.content if block.type == "tool_use")
+    raw: dict[str, Any] = dict(tool_use.input)
+    return raw, {"role": "assistant", "content": response.content}, tool_use.id
+
+
+def _anthropic_retry_messages(
+    messages: list[dict[str, Any]], assistant_entry: Any, retry_ref: Any, error_text: str
+) -> list[dict[str, Any]]:
+    return messages + [
+        assistant_entry,
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": retry_ref,
+                    "content": error_text,
+                    "is_error": True,
+                }
+            ],
+        },
+    ]
+
+
+def _ollama_tool_schema(anthropic_tool: dict) -> dict:
+    """Ollama's `tools=` param wants OpenAI-shaped function tools
+    ({'type': 'function', 'function': {'name', 'description',
+    'parameters'}}), not Anthropic's {'name', 'description',
+    'input_schema'} shape. The JSON-schema body itself (input_schema /
+    parameters) is reused as-is - only the wrapper differs."""
+    return {
+        "type": "function",
+        "function": {
+            "name": anthropic_tool["name"],
+            "description": anthropic_tool["description"],
+            "parameters": anthropic_tool["input_schema"],
+        },
+    }
+
+
+def _ollama_attempt(
+    model: str, system_prompt: str, tools: list[dict], messages: list[dict[str, Any]]
+) -> tuple[dict, Any, Any]:
+    """One local-Ollama tool-call attempt. Unlike Anthropic, Ollama has no
+    forced tool_choice - the model decides whether to call a tool at all,
+    so a model that ignores the system prompt's "always call the tool"
+    instruction surfaces here as a ValueError (routed through the same
+    bounded retry as a malformed tool call), not a silent free-text
+    fallback."""
+    import ollama  # local import: optional dependency, only needed for this backend
+
+    full_messages = [{"role": "system", "content": system_prompt}] + messages
+    response = ollama.chat(
+        model=model,
+        messages=full_messages,
+        tools=[_ollama_tool_schema(t) for t in tools],
+    )
+    msg = response.message
+    if not msg.tool_calls:
+        raise ValueError(
+            "local Ollama model did not call the emit_campaign_spec tool "
+            f"(returned plain text instead: {msg.content!r}); this model may "
+            "not support reliable tool calling - try a model documented as "
+            "tool-capable (e.g. llama3.1, qwen2.5)"
+        )
+    call = msg.tool_calls[0]
+    raw: dict[str, Any] = dict(call.function.arguments)
+    return raw, msg, call.function.name
+
+
+def _ollama_retry_messages(
+    messages: list[dict[str, Any]], assistant_entry: Any, retry_ref: Any, error_text: str
+) -> list[dict[str, Any]]:
+    return messages + [
+        assistant_entry,
+        {"role": "tool", "tool_name": retry_ref, "content": error_text},
+    ]
+
+
+def _extract_json_object(text: str) -> dict:
+    """Pull the campaign-spec JSON object out of a `claude -p` text reply.
+
+    Despite being told to respond with ONLY the JSON object, real runs have
+    done two different things `json.loads` alone can't handle: wrapped the
+    object in a markdown code fence, and/or prefixed it with an explanatory
+    sentence before the fence (e.g. "No `emit_campaign_spec` tool exists in
+    this environment, so per the schema instructions I'm responding with
+    the JSON object directly.\\n\\n```json\\n{...}"). A leading-fence-only
+    strip (the original approach here) misses that second case entirely -
+    this instead searches the whole text for a fenced block (fence can
+    start anywhere, not just at position 0), then falls back to the first
+    '{' in whatever's left; `json.JSONDecoder.raw_decode` is used instead
+    of a naive `json.loads` so trailing prose AFTER the object (also seen
+    in practice) doesn't fail the parse either."""
+    fence_match = re.search(r"```(?:json)?\s*\n(.*?)```", text, re.DOTALL)
+    candidate = fence_match.group(1) if fence_match else text
+
+    start = candidate.find("{")
+    if start == -1:
+        raise ValueError(
+            f"claude -p did not return any JSON object; raw response: {text[:500]!r}"
+        )
+    try:
+        parsed, _ = json.JSONDecoder().raw_decode(candidate[start:])
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"claude -p did not return valid JSON ({exc}); raw response: {text[:500]!r}"
+        )
+    if not isinstance(parsed, dict):
+        raise ValueError(f"claude -p returned valid JSON but not an object: {parsed!r}")
+    return parsed
+
+
+def _json_output_instructions(anthropic_tool: dict) -> str:
+    """`claude -p` (Claude Code's headless CLI mode) has no native forced
+    tool-calling - unlike the Anthropic Messages API's tool_choice or
+    Ollama's tools= param, there's no way to make the CLI guarantee a
+    structured call. Instead the schema is spelled out as plain
+    instructions appended to the system prompt, and the reply is parsed as
+    raw JSON (_extract_json_object) - the bounded self-correction retry
+    that already handles the other two backends' failure modes also covers
+    "didn't return valid JSON" and "wrapped it in a markdown fence anyway"
+    here."""
+    return (
+        "\n\nRespond with ONLY a single JSON object - no markdown code "
+        "fences, no prose before or after it - matching exactly this JSON "
+        f"Schema:\n\n{json.dumps(anthropic_tool['input_schema'], indent=2)}\n\n"
+        f"The object's top-level fields must match the schema above for "
+        f"the '{anthropic_tool['name']}' call."
+    )
+
+
+def _claude_cli_attempt(
+    model: str, system_prompt: str, tools: list[dict], messages: list[dict[str, Any]]
+) -> tuple[dict, Any, Any]:
+    """One `claude -p` (Claude Code's own CLI, headless/print mode)
+    attempt. Uses the CLI's own logged-in credentials (subscription/OAuth)
+    instead of a raw ANTHROPIC_API_KEY - for a user who has Claude Code
+    installed and logged in but no separate API key. `--allowedTools ""`
+    is an empty tool whitelist, so the spawned session can't touch the
+    filesystem, run commands, or do anything besides answer in text - it's
+    used purely as a text-completion engine here, not as an agent.
+
+    Conversation state lives server-side (`--resume <session_id>`), unlike
+    the other two backends which replay the full message history
+    themselves - so `messages` here only ever needs its last entry (the
+    next prompt to send, and the session_id to resume, if any)."""
+    import shutil
+    import subprocess
+
+    claude_bin = shutil.which("claude")
+    if claude_bin is None:
+        raise RuntimeError(
+            "claude CLI not found on PATH - the --claude-cli backend needs "
+            "Claude Code itself installed and logged in "
+            "(see https://claude.com/claude-code)"
+        )
+
+    last = messages[-1]
+    prompt = last["content"]
+    session_id = last.get("session_id")
+
+    cmd = [
+        claude_bin, "-p", prompt,
+        "--output-format", "json",
+        "--model", model,
+        "--allowedTools", "",
+    ]
+    if session_id:
+        cmd += ["--resume", session_id]
+    else:
+        # System prompt is only settable on the first turn of a session -
+        # --resume replays the recorded one automatically (system-prompt
+        # snapshotting, on by default), so it's omitted on retries.
+        cmd += ["--system-prompt", system_prompt + _json_output_instructions(tools[0])]
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    if result.returncode != 0:
+        raise RuntimeError(f"claude -p exited {result.returncode}: {result.stderr.strip()[:1000]}")
+
+    payload = json.loads(result.stdout)
+    if payload.get("is_error"):
+        raise ValueError(f"claude -p returned an error: {payload.get('result')!r}")
+
+    raw = _extract_json_object(payload["result"])
+    return raw, None, payload["session_id"]
+
+
+def _claude_cli_retry_messages(
+    messages: list[dict[str, Any]], assistant_entry: Any, retry_ref: Any, error_text: str
+) -> list[dict[str, Any]]:
+    # retry_ref is the previous attempt's session_id; --resume in
+    # _claude_cli_attempt continues that same server-side conversation, so
+    # (unlike the other two backends) no prior turns need replaying here.
+    return [{"content": error_text, "session_id": retry_ref}]
+
+
+_BACKENDS = {
+    "anthropic": (_anthropic_attempt, _anthropic_retry_messages),
+    "ollama": (_ollama_attempt, _ollama_retry_messages),
+    "claude_cli": (_claude_cli_attempt, _claude_cli_retry_messages),
+}
+
+
+def _generate_spec_via_llm(
+    *,
+    question_for_spec: str,
+    initial_messages: list[dict[str, Any]],
+    model: str | None,
+    backend: str,
+    provenance_action: str,
+) -> dict:
+    """Shared attempt/retry loop behind both generate_campaign_spec_llm and
+    generate_revised_campaign_spec_llm: resolve the model, dispatch to the
+    chosen backend's one-attempt call, validate the result via
+    _spec_from_raw, and give the model one bounded corrective retry (see
+    module docstring) before raising."""
+    if backend not in _BACKENDS:
+        raise ValueError(f"Unknown LLM backend {backend!r}; expected one of {sorted(_BACKENDS)}")
+    attempt_fn, retry_fn = _BACKENDS[backend]
+
+    resolved_model = _resolve_model(backend, model)
+    system_prompt = _build_system_prompt()
+    tools = [_build_tool_schema()]
+    messages = list(initial_messages)
+
+    last_error: Exception | None = None
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        # One PROV-AGENT 'AIModelInvocation' record per actual LLM call -
+        # architecture plan Sec.18. A bounded self-correction retry (below)
+        # shows up as a second, separate record here, making the retry
+        # itself part of the auditable trail rather than an invisible
+        # implementation detail.
+        with agent_llm_invocation_task(
+            "PlannerAgent", provenance_action,
+            used={
+                "question": question_for_spec,
+                "model": resolved_model,
+                "backend": backend,
+                "attempt": attempt,
+            },
+        ) as t:
+            raw, assistant_entry, retry_ref = attempt_fn(resolved_model, system_prompt, tools, messages)
+            t.end(generated={"tool_input": raw})
+
+        try:
+            return _spec_from_raw(raw, question_for_spec, resolved_model)
+        except ValueError as exc:
+            last_error = exc
+            if attempt >= _MAX_ATTEMPTS:
+                break
+            # Bounded self-correction: hand the mistake back as a tool
+            # error and let the model try again once (architecture plan
+            # Sec.7/Sec.17 - cap recovery attempts rather than retry
+            # unboundedly). The message names the ACTUAL problem (missing
+            # fragments, missing basis/xc, malformed parent/fragment, ...)
+            # rather than a fixed "add fragments" hint that would mislead
+            # the retry for any other failure (found 2026-09-24: a local
+            # Ollama model tripped the missing-basis/xc case, not fragments).
+            error_text = (
+                f"Invalid emit_campaign_spec call: {exc}. Call "
+                "emit_campaign_spec again, fixing exactly that problem and "
+                "keeping everything else about your answer the same."
+            )
+            messages = retry_fn(messages, assistant_entry, retry_ref, error_text)
+
+    raise ValueError(
+        f"{backend} backend failed to produce a valid campaign spec after "
+        f"{_MAX_ATTEMPTS} attempts, for question: {question_for_spec!r} ({last_error})"
+    )
+
+
 @flowcept_task
-def generate_campaign_spec_llm(question: str, model: str | None = None) -> dict:
-    """Ask Claude to turn a natural-language question into a campaign spec.
+def generate_campaign_spec_llm(
+    question: str, model: str | None = None, backend: str = "anthropic"
+) -> dict:
+    """Ask an LLM (Claude via the Anthropic API by default, a local Ollama
+    model if backend='ollama', or Claude via the logged-in Claude Code CLI
+    if backend='claude_cli') to turn a natural-language question into a campaign
+    spec.
 
     Returns a JSON-safe dict. For analysis_type='single_point' this matches
     the flat shape PlannerAgent.plan_campaign already produces (plus extra
@@ -295,73 +660,16 @@ def generate_campaign_spec_llm(question: str, model: str | None = None) -> dict:
     those skills expect (see module docstring for the known boundary here).
 
     Gives the model one bounded corrective retry (see module docstring) if
-    it chooses a fragments-requiring analysis_type but returns no fragments;
-    raises ValueError only if that still fails on the second attempt."""
-    resolved_model = model or os.environ.get("ANTHROPIC_MODEL", _DEFAULT_MODEL)
-    client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from the environment
-
-    system_prompt = _build_system_prompt()
-    tools = [_build_tool_schema()]
-    messages: list[dict[str, Any]] = [{"role": "user", "content": question}]
-
-    last_error: Exception | None = None
-    for attempt in range(1, _MAX_ATTEMPTS + 1):
-        # One PROV-AGENT 'AIModelInvocation' record per actual API call -
-        # architecture plan Sec.18. A bounded self-correction retry (below)
-        # shows up as a second, separate record here, making the retry
-        # itself part of the auditable trail rather than an invisible
-        # implementation detail.
-        with agent_llm_invocation_task(
-            "PlannerAgent", "generate_campaign_spec_llm",
-            used={"question": question, "model": resolved_model, "attempt": attempt},
-        ) as t:
-            response = client.messages.create(
-                model=resolved_model,
-                max_tokens=1024,
-                system=system_prompt,
-                tools=tools,
-                tool_choice={"type": "tool", "name": "emit_campaign_spec"},
-                messages=messages,
-            )
-
-            tool_use = next(block for block in response.content if block.type == "tool_use")
-            raw: dict[str, Any] = dict(tool_use.input)
-            t.end(generated={"tool_input": raw})
-
-        try:
-            return _spec_from_raw(raw, question, resolved_model)
-        except ValueError as exc:
-            last_error = exc
-            if attempt >= _MAX_ATTEMPTS:
-                break
-            # Bounded self-correction: hand the mistake back as a tool
-            # error and let the model try again once, still forced through
-            # tool_choice (architecture plan Sec.7/Sec.17 - cap recovery
-            # attempts rather than retry unboundedly).
-            messages = messages + [
-                {"role": "assistant", "content": response.content},
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": tool_use.id,
-                            "content": (
-                                f"Invalid emit_campaign_spec call: {exc}. Call "
-                                "emit_campaign_spec again, this time including a "
-                                "non-empty 'fragments' array."
-                            ),
-                            "is_error": True,
-                        }
-                    ],
-                },
-            ]
-
-    raise ValueError(
-        f"Claude failed to produce a valid campaign spec after {_MAX_ATTEMPTS} "
-        f"attempts, for question: {question!r} ({last_error})"
+    it chooses a fragments-requiring analysis_type but returns no fragments,
+    or (Ollama only) doesn't call the tool at all; raises ValueError only if
+    that still fails on the second attempt."""
+    return _generate_spec_via_llm(
+        question_for_spec=question,
+        initial_messages=[{"role": "user", "content": question}],
+        model=model,
+        backend=backend,
+        provenance_action="generate_campaign_spec_llm",
     )
-
 
 
 def _build_revision_user_message(
@@ -397,75 +705,32 @@ def generate_revised_campaign_spec_llm(
     verdict: dict,
     feedback: str,
     model: str | None = None,
+    backend: str = "anthropic",
 ) -> dict:
-    """Ask Claude to revise a campaign spec in light of its own prior
+    """Ask an LLM (Claude via the Anthropic API by default, a local Ollama
+    model if backend='ollama', or Claude via the logged-in Claude Code CLI
+    if backend='claude_cli') to revise a campaign spec in light of its own prior
     results, the critic's verdict, and free-text human feedback (Phase 10 -
     the 'reprioritize' choice at the post-analysis human-approval gate,
     agents/human_gate.py). Shares generate_campaign_spec_llm's tool schema,
-    bounded self-correction retry (see module docstring), and output shape;
-    the only difference is what goes into the initial user message (see
-    _build_revision_user_message above) and that two extra provenance
-    fields, 'revised_from' and 'revision_feedback', are stamped onto the
-    returned spec."""
-    resolved_model = model or os.environ.get("ANTHROPIC_MODEL", _DEFAULT_MODEL)
-    client = anthropic.Anthropic()
-
-    system_prompt = _build_system_prompt()
-    tools = [_build_tool_schema()]
-    user_message = _build_revision_user_message(previous_spec, previous_results, verdict, feedback)
-    messages: list[dict[str, Any]] = [{"role": "user", "content": user_message}]
+    backend dispatch, and bounded self-correction retry (see module
+    docstring) via _generate_spec_via_llm; the only difference is what goes
+    into the initial user message (see _build_revision_user_message above)
+    and that two extra provenance fields, 'revised_from' and
+    'revision_feedback', are stamped onto the returned spec."""
     question_for_spec = (
         f"{previous_spec.get('source_question', previous_spec.get('smiles', ''))} "
         f"| REVISION FEEDBACK: {feedback}"
     )
+    user_message = _build_revision_user_message(previous_spec, previous_results, verdict, feedback)
 
-    last_error: Exception | None = None
-    for attempt in range(1, _MAX_ATTEMPTS + 1):
-        with agent_llm_invocation_task(
-            "PlannerAgent", "generate_revised_campaign_spec_llm",
-            used={"feedback": feedback, "model": resolved_model, "attempt": attempt},
-        ) as t:
-            response = client.messages.create(
-                model=resolved_model,
-                max_tokens=1024,
-                system=system_prompt,
-                tools=tools,
-                tool_choice={"type": "tool", "name": "emit_campaign_spec"},
-                messages=messages,
-            )
-            tool_use = next(block for block in response.content if block.type == "tool_use")
-            raw: dict[str, Any] = dict(tool_use.input)
-            t.end(generated={"tool_input": raw})
-
-        try:
-            spec = _spec_from_raw(raw, question_for_spec, resolved_model)
-            spec["revised_from"] = previous_spec.get("analysis_type")
-            spec["revision_feedback"] = feedback
-            return spec
-        except ValueError as exc:
-            last_error = exc
-            if attempt >= _MAX_ATTEMPTS:
-                break
-            messages = messages + [
-                {"role": "assistant", "content": response.content},
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": tool_use.id,
-                            "content": (
-                                f"Invalid emit_campaign_spec call: {exc}. Call "
-                                "emit_campaign_spec again, this time including a "
-                                "non-empty 'fragments' array."
-                            ),
-                            "is_error": True,
-                        }
-                    ],
-                },
-            ]
-
-    raise ValueError(
-        f"Claude failed to produce a valid revised campaign spec after "
-        f"{_MAX_ATTEMPTS} attempts ({last_error})"
+    spec = _generate_spec_via_llm(
+        question_for_spec=question_for_spec,
+        initial_messages=[{"role": "user", "content": user_message}],
+        model=model,
+        backend=backend,
+        provenance_action="generate_revised_campaign_spec_llm",
     )
+    spec["revised_from"] = previous_spec.get("analysis_type")
+    spec["revision_feedback"] = feedback
+    return spec

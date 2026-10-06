@@ -60,20 +60,30 @@ class PlannerAgent(Agent):
         return spec
 
     @action
-    async def plan_campaign_from_prompt(self, question: str, model: str | None = None) -> dict:
+    async def plan_campaign_from_prompt(
+        self, question: str, model: str | None = None, backend: str = "anthropic"
+    ) -> dict:
         """LLM-backed planning (Phase 5): turns a natural-language research
         question into the same campaign spec shape `plan_campaign` returns.
-        The Claude API call is a blocking network request, so it's
-        dispatched through agent_run_sync like Executor's engine calls.
-        The actual prompt/response cycle(s) - including any Phase-6-added
-        bounded self-correction retry - are captured separately, one level
-        down, inside generate_campaign_spec_llm itself (llm/planner_llm.py)
-        as PROV-AGENT 'AIModelInvocation' records; this outer task instead
+        `backend` selects which LLM answers the tool call - 'anthropic'
+        (default, the hosted Claude API), 'ollama' (a local model via a
+        running `ollama serve`, CLI: --ollama), or 'claude_cli' (the
+        logged-in Claude Code CLI via `claude -p`, CLI: --claude-cli, for
+        no-API-key use). Either way this is a blocking network/subprocess
+        call, so it's dispatched through
+        agent_run_sync like Executor's engine calls. The actual
+        prompt/response cycle(s) - including any Phase-6-added bounded
+        self-correction retry - are captured separately, one level down,
+        inside generate_campaign_spec_llm itself (llm/planner_llm.py) as
+        PROV-AGENT 'AIModelInvocation' records; this outer task instead
         records the PlannerAgent's own tool invocation as a whole."""
         with agent_tool_task(
-            _AGENT_ID, "plan_campaign_from_prompt", used={"question": question, "model": model},
+            _AGENT_ID, "plan_campaign_from_prompt",
+            used={"question": question, "model": model, "backend": backend},
         ) as t:
-            spec = await self.agent_run_sync(generate_campaign_spec_llm, question, model=model)
+            spec = await self.agent_run_sync(
+                generate_campaign_spec_llm, question, model=model, backend=backend,
+            )
             t.end(generated=spec)
         return spec
 
@@ -85,6 +95,7 @@ class PlannerAgent(Agent):
         verdict: dict,
         feedback: str,
         model: str | None = None,
+        backend: str = "anthropic",
     ) -> dict:
         """Phase 10: revise a previous campaign spec in light of its own
         results, the critic's verdict, and free-text human feedback given at
@@ -93,8 +104,10 @@ class PlannerAgent(Agent):
         (generate_revised_campaign_spec_llm) regardless of whether the
         original spec came from plan_campaign or plan_campaign_from_prompt -
         interpreting free-text feedback needs language understanding either
-        way. Same agent_run_sync dispatch and PROV-AGENT 'AgentTool'
-        wrapping as the other two actions above."""
+        way. `backend` selects 'anthropic' (default), 'ollama', or
+        'claude_cli', same as plan_campaign_from_prompt above. Same
+        agent_run_sync dispatch and
+        PROV-AGENT 'AgentTool' wrapping as the other two actions above."""
         with agent_tool_task(
             _AGENT_ID, "replan_campaign",
             used={
@@ -102,11 +115,12 @@ class PlannerAgent(Agent):
                 "verdict": verdict,
                 "feedback": feedback,
                 "model": model,
+                "backend": backend,
             },
         ) as t:
             spec = await self.agent_run_sync(
                 generate_revised_campaign_spec_llm,
-                previous_spec, previous_results, verdict, feedback, model=model,
+                previous_spec, previous_results, verdict, feedback, model=model, backend=backend,
             )
             t.end(generated=spec)
         return spec
