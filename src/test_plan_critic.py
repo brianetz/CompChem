@@ -97,6 +97,30 @@ class PostRun(unittest.TestCase):
         out = augment_verdict(r, {"qc_flag": "FAIL", "qc_notes": "parent_calculation_failed:e"})
         self.assertEqual(out["qc_flag"], "FAIL")
 
+    def _oh(self, s2, atom_spin, mult=2):
+        return {"analysis_type": "bde", "bde_kcal_mol": 118.0, "parent": {}, "fragments": [
+            {"label": "OH", "smiles": "[OH]", "multiplicity": mult,
+             "refinement": {"s2": s2, "atom_spin": atom_spin}}]}
+
+    def test_clean_radical_spin_passes(self):
+        out = augment_verdict(self._oh(0.7512, [0.93, 0.07]), self.PASS_VERDICT)
+        self.assertEqual(out["qc_flag"], "PASS")
+
+    def test_spin_contamination_fails_the_verdict(self):
+        out = augment_verdict(self._oh(1.30, None), self.PASS_VERDICT)
+        self.assertEqual(out["qc_flag"], "FAIL")
+        self.assertIn("spin_contamination", out["qc_notes"])
+
+    @unittest.skipUnless(v.HAVE_RDKIT, "RDKit not installed")
+    def test_radical_on_wrong_atom_fails(self):
+        out = augment_verdict(self._oh(0.7512, [0.05, 0.95]), self.PASS_VERDICT)
+        self.assertEqual(out["qc_flag"], "FAIL")
+        self.assertIn("radical_location", out["qc_notes"])
+
+    def test_engine_without_spin_data_is_skipped(self):
+        r = self._oh(None, None)
+        self.assertEqual(augment_verdict(r, self.PASS_VERDICT)["qc_flag"], "PASS")
+
     @unittest.skipUnless(v.HAVE_RDKIT, "RDKit not installed")
     def test_connectivity_flags_dissociated_geometry(self):
         stretched = {"symbols": ["O", "H", "H"],

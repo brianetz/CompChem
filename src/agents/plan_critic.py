@@ -75,9 +75,9 @@ def augment_verdict(results: dict, verdict: dict) -> dict:
     to the critic's verdict. Returns a NEW dict; the skill's own verdict is only
     ever made stricter, never relaxed. Non-BDE results are returned unchanged.
 
-    Not covered here: spin contamination / spin-density location
-    (``check_spin``). That needs <S^2> and per-atom spin populations from the
-    refinement engine, which engines/pyscf_engine.py does not return today.
+    Spin checks (``check_spin``) use the <S^2> / per-atom spin populations the
+    PySCF engine returns for open-shell species; engines that do not report
+    them (e.g. NWChem today) are simply skipped.
     """
     if results.get("analysis_type") != "bde":
         return verdict
@@ -86,9 +86,23 @@ def augment_verdict(results: dict, verdict: dict) -> dict:
     if results.get("bde_kcal_mol") is not None:
         checks.append(v.check_bde_value(results["bde_kcal_mol"]))
 
+    species = [("parent", results.get("parent") or {})]
+    species += [(f.get("label") or f.get("smiles", "fragment"), f) for f in results.get("fragments", [])]
+
+    for label, sp in species:
+        refinement = sp.get("refinement") or {}
+        if sp.get("status") == "failed" or refinement.get("s2") is None:
+            continue
+        try:
+            expected = v.expected_radical_atoms(sp["smiles"]) if v.HAVE_RDKIT else None
+            checks += v.check_spin(
+                str(label), int(sp.get("multiplicity", 1)), refinement["s2"],
+                atom_spin=refinement.get("atom_spin"), expected_atoms=expected or None,
+            )
+        except Exception as exc:
+            checks.append(v.Check(f"{label}_spin", v.WARN, f"check could not run: {exc}"))
+
     if v.HAVE_RDKIT:
-        species = [("parent", results.get("parent") or {})]
-        species += [(f.get("label") or f.get("smiles", "fragment"), f) for f in results.get("fragments", [])]
         for label, sp in species:
             xtb = sp.get("xtb") or {}
             if sp.get("status") == "failed" or not xtb.get("symbols") or not xtb.get("positions"):
