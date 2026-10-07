@@ -65,3 +65,43 @@ async def critique_spec(
         _print_report(report, f"after correction {attempts}")
 
     return spec, report
+
+
+_RANK = {v.PASS: 0, v.WARN: 1, v.FAIL: 2}
+
+
+def augment_verdict(results: dict, verdict: dict) -> dict:
+    """Post-run: add BDE sanity-band and optimized-geometry connectivity checks
+    to the critic's verdict. Returns a NEW dict; the skill's own verdict is only
+    ever made stricter, never relaxed. Non-BDE results are returned unchanged.
+
+    Not covered here: spin contamination / spin-density location
+    (``check_spin``). That needs <S^2> and per-atom spin populations from the
+    refinement engine, which engines/pyscf_engine.py does not return today.
+    """
+    if results.get("analysis_type") != "bde":
+        return verdict
+
+    checks = []
+    if results.get("bde_kcal_mol") is not None:
+        checks.append(v.check_bde_value(results["bde_kcal_mol"]))
+
+    if v.HAVE_RDKIT:
+        species = [("parent", results.get("parent") or {})]
+        species += [(f.get("label") or f.get("smiles", "fragment"), f) for f in results.get("fragments", [])]
+        for label, sp in species:
+            xtb = sp.get("xtb") or {}
+            if sp.get("status") == "failed" or not xtb.get("symbols") or not xtb.get("positions"):
+                continue
+            try:
+                checks.append(v.check_connectivity(str(label), xtb["symbols"], xtb["positions"], sp["smiles"]))
+            except Exception as exc:  # a diagnostic must never crash the campaign
+                checks.append(v.Check(f"{label}_connectivity", v.WARN, f"check could not run: {exc}"))
+
+    notes = [f"plan_critic:{c.name}:{c.message}".replace(";", ",") for c in checks if c.status != v.PASS]
+    worst = max((c.status for c in checks), key=_RANK.get, default=v.PASS)
+    flag = max(verdict.get("qc_flag", v.PASS), worst, key=_RANK.get)
+    old = verdict.get("qc_notes")
+    merged = ";".join(([old] if old else []) + notes) or None
+    print("Post-run critique:", {"qc_flag": flag, "added_notes": notes})
+    return {**verdict, "qc_flag": flag, "qc_notes": merged}

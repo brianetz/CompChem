@@ -94,7 +94,8 @@ def parse_args() -> argparse.Namespace:
         help="Opt-in: run the deterministic BDE plan validator "
         "(analysis/bde_plan_validator.py) on each plan before the approval "
         "gate, with one bounded corrective replan on FAIL. With "
-        "--auto-approve, a plan that still FAILs is aborted instead of run.",
+        "--auto-approve, a plan that still FAILs is aborted instead of run. "
+        "Also adds BDE-value and geometry-connectivity checks to the critic's verdict.",
     )
     return parser.parse_args()
 
@@ -168,6 +169,10 @@ async def run_campaign(args: argparse.Namespace) -> str:
 
             verdict = await critic.review_analysis(results)
             print("Critic verdict:", verdict)
+            if args.critique_plan:  # opt-in: extra post-run BDE sanity checks
+                from agents.plan_critic import augment_verdict
+
+                verdict = augment_verdict(results, verdict)
 
             analysis_decision = await request_analysis_approval(
                 spec, results, verdict, auto_approve=args.auto_approve

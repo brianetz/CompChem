@@ -5,7 +5,7 @@ Run from src/:  python -m unittest test_plan_critic
 import asyncio
 import unittest
 
-from agents.plan_critic import critique_spec
+from agents.plan_critic import augment_verdict, critique_spec
 from analysis import bde_plan_validator as v
 from test_bde_plan_validator import water_spec
 
@@ -65,6 +65,48 @@ class PlanCritic(unittest.TestCase):
         self.assertEqual(planner.calls, [])
         if v.HAVE_RDKIT:
             self.assertNotEqual(report.verdict, v.FAIL)
+
+
+class PostRun(unittest.TestCase):
+    PASS_VERDICT = {"qc_flag": "PASS", "qc_notes": None}
+
+    def test_non_bde_results_unchanged(self):
+        r = {"analysis_type": "single_point"}
+        self.assertIs(augment_verdict(r, self.PASS_VERDICT), self.PASS_VERDICT)
+
+    def test_negative_bde_escalates_to_fail_and_keeps_existing_notes(self):
+        r = {"analysis_type": "bde", "bde_kcal_mol": -5.0, "parent": {}, "fragments": []}
+        out = augment_verdict(r, {"qc_flag": "WARN", "qc_notes": "x_xtb_not_converged"})
+        self.assertEqual(out["qc_flag"], "FAIL")
+        self.assertIn("x_xtb_not_converged", out["qc_notes"])
+        self.assertIn("bde_value", out["qc_notes"])
+
+    def test_never_relaxes_an_existing_fail(self):
+        r = {"analysis_type": "bde", "bde_kcal_mol": 100.0, "parent": {}, "fragments": []}
+        out = augment_verdict(r, {"qc_flag": "FAIL", "qc_notes": "a"})
+        self.assertEqual(out["qc_flag"], "FAIL")
+
+    def test_plausible_bde_adds_no_notes(self):
+        r = {"analysis_type": "bde", "bde_kcal_mol": 118.0, "parent": {}, "fragments": []}
+        out = augment_verdict(r, self.PASS_VERDICT)
+        self.assertEqual((out["qc_flag"], out["qc_notes"]), ("PASS", None))
+
+    def test_failed_species_are_skipped_not_crashed(self):
+        r = {"analysis_type": "bde", "bde_kcal_mol": None,
+             "parent": {"status": "failed", "smiles": "O"}, "fragments": []}
+        out = augment_verdict(r, {"qc_flag": "FAIL", "qc_notes": "parent_calculation_failed:e"})
+        self.assertEqual(out["qc_flag"], "FAIL")
+
+    @unittest.skipUnless(v.HAVE_RDKIT, "RDKit not installed")
+    def test_connectivity_flags_dissociated_geometry(self):
+        stretched = {"symbols": ["O", "H", "H"],
+                     "positions": [[0, 0, 0.117], [0, 0.757, -0.469], [0, -3.5, -0.469]]}
+        good = {"symbols": ["O", "H", "H"],
+                "positions": [[0, 0, 0.117], [0, 0.757, -0.469], [0, -0.757, -0.469]]}
+        mk = lambda xtb: {"analysis_type": "bde", "bde_kcal_mol": 118.0,
+                          "parent": {"smiles": "O", "xtb": xtb}, "fragments": []}
+        self.assertEqual(augment_verdict(mk(good), self.PASS_VERDICT)["qc_flag"], "PASS")
+        self.assertEqual(augment_verdict(mk(stretched), self.PASS_VERDICT)["qc_flag"], "WARN")
 
 
 if __name__ == "__main__":
