@@ -57,4 +57,7 @@ def _spin_diagnostics(mol, mf) -> dict:
     dm_a, dm_b = mf.make_rdm1()
     spin_per_ao = ((dm_a - dm_b) * mf.get_ovlp()).sum(axis=0)  # diag of (Da-Db)S
     atom_spin = [float(spin_per_ao[p0:p1].sum()) for _, _, p0, p1 in mol.aoslice_by_atom()]
-    return {"s2": float(s2), "atom_spin": atom_spin}
+    # 'atom_spin' (plain list, input atom order) is what check_spin consumes;
+    # 'atom_spin_labeled' is the same data keyed "<element><index>" for humans.
+    labeled = {f"{mol.atom_symbol(i)}{i}": round(x, 4) for i, x in enumerate(atom_spin)}
+    return {"s2": float(s2), "atom_spin": atom_spin, "atom_spin_labeled": labeled}
