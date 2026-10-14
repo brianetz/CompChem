@@ -12,8 +12,10 @@ from __future__ import annotations
 import os
 
 from parsl.config import Config
+from parsl.addresses import address_by_interface
 from parsl.executors import HighThroughputExecutor
-from parsl.providers import LocalProvider
+from parsl.launchers import SrunLauncher
+from parsl.providers import LocalProvider, SlurmProvider
 
 
 def get_local_config(max_workers: int | None = None) -> Config:
@@ -34,6 +36,56 @@ def get_local_config(max_workers: int | None = None) -> Config:
                 provider=LocalProvider(
                     init_blocks=1,
                     max_blocks=1,
+                ),
+            )
+        ],
+    )
+
+
+# Frontier compute nodes have 64 cores, 56 of them usable by jobs (the rest
+# are reserved for system noise by default).
+FRONTIER_USABLE_CORES = 56
+
+
+def get_frontier_config(
+    account: str,
+    partition: str,
+    nodes: int,
+    walltime: str,
+    workers_per_node: int,
+    worker_init: str,
+    interface: str = "hsn0",
+) -> Config:
+    """Frontier config: ONE Slurm block of `nodes` nodes, each running
+    `workers_per_node` concurrent Parsl workers - so many tasks share a node
+    instead of each task holding (and billing) a whole node to itself.
+
+    The interchange runs wherever this is loaded (normally a login node);
+    workers on the compute nodes connect back to it over `interface` (the
+    Slingshot high-speed network, hsn0, reachable from compute nodes).
+    """
+    return Config(
+        executors=[
+            HighThroughputExecutor(
+                label="htex_frontier",
+                address=address_by_interface(interface),
+                max_workers_per_node=workers_per_node,
+                cores_per_worker=FRONTIER_USABLE_CORES / workers_per_node,
+                provider=SlurmProvider(
+                    account=account,
+                    partition=partition,
+                    nodes_per_block=nodes,
+                    init_blocks=1,
+                    # Not 0: the driver holds tasks back until the shared
+                    # Ollama server is up, and with min_blocks=0 Parsl
+                    # cancels the still-idle block after 2 min.
+                    min_blocks=1,
+                    max_blocks=1,
+                    walltime=walltime,
+                    worker_init=worker_init,
+                    # One worker manager per node, given every usable core -
+                    # srun's default would pin it to a single core.
+                    launcher=SrunLauncher(overrides=f"--cpus-per-task={FRONTIER_USABLE_CORES}"),
                 ),
             )
         ],
