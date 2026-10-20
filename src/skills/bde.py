@@ -11,13 +11,57 @@ from __future__ import annotations
 from skills._common import compute_species_from_smiles, render_species_image
 from analysis.qc_common import classify, energy_present
 from utils.units import delta_hartree_to_kcal
+from storage.results_db import get_db, detect_broken_bond, canonical_smiles, method_string
+from storage.rag import bond_types_in
+from analysis.species_checks import atom_balance
 
 NAME = "bde"
+# Electronic homolytic BDEs of real bonds: weak peroxide/halogen bonds sit
+# near 30-50 kcal/mol, the strongest (C#O, N#N) near 226-257. Outside this,
+# the species do not describe one bond breaking.
+_BDE_RANGE_KCAL = (0.0, 270.0)
 DESCRIPTION = (
     "A bond dissociation energy question: needs a parent molecule plus "
     "one or more dissociation fragments - the species the SPECIFIC bond "
     "breaks into (NOT full atomization of the molecule)."
 )
+
+
+def species_requests(spec: dict) -> list[dict]:
+    """Every species this spec needs computed, as keyword arguments for
+    skills._common.compute_species_from_smiles - lets a driver deduplicate
+    species across many specs before submitting any compute
+    (agents/compute_species.py)."""
+    basis, xc = spec["basis"], spec["xc"]
+    engine = spec.get("refinement_engine", "pyscf")
+    species = [spec["parent"], *(spec.get("fragments") or [])]
+    return [
+        {"path": "smiles", "smiles": s["smiles"], "charge": s.get("charge", 0),
+         "multiplicity": s.get("multiplicity", 1), "basis": basis, "xc": xc,
+         "refinement_engine": engine}
+        for s in species
+    ]
+
+
+def _record_bde(spec: dict, results: dict) -> None:
+    """Index a finished BDE by bond type in the results database (no-op
+    when caching is off or any species lacks a cache key)."""
+    db = get_db()
+    parent = results["parent"]
+    frags = results["fragments"]
+    keys = [(s.get("cache") or {}).get("key") for s in [parent, *frags]]
+    if db is None or not all(keys):
+        return
+    frag_smiles = [canonical_smiles(f["smiles"]) for f in frags]
+    parent_smiles = canonical_smiles(parent["smiles"])
+    results["bond_type"] = detect_broken_bond(parent_smiles, frag_smiles)
+    results["bde_record_id"] = db.record_bde(
+        parent_key=keys[0], fragment_keys=keys[1:], parent_smiles=parent_smiles,
+        fragment_smiles=frag_smiles, bond_type=results["bond_type"],
+        method=method_string(results["refinement_engine"], spec["xc"], spec["basis"], "smiles-embed"),
+        bde_hartree=results["bde_hartree"], bde_kcal_mol=results["bde_kcal_mol"],
+        qc_flag=review(results)["qc_flag"], source_question=spec.get("source_question"),
+    )
 
 
 def run(spec: dict) -> dict:
@@ -59,14 +103,25 @@ def run(spec: dict) -> dict:
         bde_hartree = fragments_energy_sum - parent_energy
         bde_kcal_mol = delta_hartree_to_kcal(bde_hartree)
 
-    return {
+    frag_smiles = [f["smiles"] for f in fragment_specs]
+    results = {
         "analysis_type": NAME,
         "refinement_engine": refinement_engine,
         "parent": parent_result,
         "fragments": fragment_results,
         "bde_hartree": bde_hartree,
         "bde_kcal_mol": bde_kcal_mol,
+        # For review(): what the fragments add up to, which bond they come
+        # from, and which bond the question asked about.
+        "atom_balance": atom_balance(parent_spec["smiles"], frag_smiles),
+        "bond_type": detect_broken_bond(parent_spec["smiles"], frag_smiles),
+        "requested_bonds": bond_types_in(spec.get("source_question") or ""),
     }
+    try:
+        _record_bde(spec, results)
+    except Exception as exc:  # indexing is a side effect; never fail the BDE over it
+        print(f"[results-db] BDE not indexed: {type(exc).__name__}: {exc}")
+    return results
 
 
 def review(results: dict) -> dict:
@@ -98,7 +153,22 @@ def review(results: dict) -> dict:
     for frag in results.get("fragments", []):
         _check(frag, frag.get("label", frag.get("smiles", "fragment")))
 
-    hard_fail_markers = ("_refinement_not_converged", "_missing_energy", "_calculation_failed")
+    # Found 2026-10-19: a methanol "BDE" from [OH] + [H] (no CH3) came out
+    # at 24 763 kcal/mol and passed, and a C-H break passed for an O-H
+    # question. Convergence alone does not make the answer right.
+    if results.get("atom_balance"):
+        notes.append(f"atom_balance_mismatch:{results['atom_balance']}")
+    bde = results.get("bde_kcal_mol")
+    if bde is not None and not _BDE_RANGE_KCAL[0] <= bde <= _BDE_RANGE_KCAL[1]:
+        notes.append(f"bde_implausible:{bde:.1f} kcal/mol outside {_BDE_RANGE_KCAL}")
+    requested, broken = results.get("requested_bonds") or [], results.get("bond_type")
+    if requested and broken and broken not in requested:
+        notes.append(f"wrong_bond:{broken} broken, question asks {'/'.join(requested)}")
+    elif requested and not broken and not results.get("atom_balance"):
+        notes.append("bond_undetermined")
+
+    hard_fail_markers = ("_refinement_not_converged", "_missing_energy", "_calculation_failed",
+                         "atom_balance_mismatch", "bde_implausible", "wrong_bond")
     return classify(notes, hard_fail_markers)
 
 
@@ -113,10 +183,13 @@ def describe(
         if species.get("status") == "failed":
             return f"- {prefix}: {species.get('smiles')} -> FAILED: {species.get('error')}"
         refinement = species.get("refinement") or {}
+        outcome = (species.get("cache") or {}).get("outcome")
+        cache_note = f" [cache: {outcome}]" if outcome and outcome != "disabled" else ""
         return (
             f"- {prefix}: {species.get('smiles')} "
             f"(charge={species.get('charge')}, multiplicity={species.get('multiplicity')}) -> "
             f"{refinement.get('energy_hartree')} hartree (converged={refinement.get('converged')})"
+            f"{cache_note}"
         )
 
     lines = [
@@ -152,4 +225,6 @@ def describe(
         else "- BDE not computed"
     )
     lines += ["", "## Bond dissociation energy", bde_line]
+    if results.get("bond_type"):
+        lines.append(f"- bond: {results['bond_type']}")
     return lines

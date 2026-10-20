@@ -20,6 +20,11 @@ An "analysis skill" is a self-contained module in this package exposing:
         of a species' optimized structure under that directory - purely a
         report-layer nicety, never required, and never a reason to fail
         the report if PyMOL isn't installed or rendering fails.
+    species_requests(spec) -> list[dict]             - optional: every
+        species the spec needs, as compute_species_* kwargs plus 'path'
+        ('smiles' or 'conformer'). Used by the staged driver to deduplicate
+        species across many campaigns before submitting compute
+        (agents/compute_species.py, storage/results_db.py).
 
 ExecutorAgent, CriticAgent, and ReporterAgent each have exactly ONE generic
 action that looks a skill up here by analysis_type and calls it. Adding a

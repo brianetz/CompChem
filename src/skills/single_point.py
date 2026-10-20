@@ -18,6 +18,13 @@ DESCRIPTION = (
 )
 
 
+def species_requests(spec: dict) -> list[dict]:
+    """See skills.bde.species_requests."""
+    return [{"path": "conformer", "smiles": spec["smiles"], "charge": spec.get("charge", 0),
+             "multiplicity": spec.get("multiplicity", 1), "basis": spec["basis"], "xc": spec["xc"],
+             "refinement_engine": spec.get("refinement_engine", "pyscf")}]
+
+
 def run(spec: dict) -> dict:
     result = compute_species_from_conformer_search(
         spec["smiles"],

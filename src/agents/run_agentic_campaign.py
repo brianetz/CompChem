@@ -29,6 +29,13 @@ Usage:
         [--claude-cli]                                         # use the logged-in Claude Code CLI instead of the Anthropic API
         [--auto-approve]                                       # skip both human-approval gates (Phase 10) - scripted/test runs
         [--max-replan-rounds 2]                                # cap on 'reprioritize' round-trips through the planner (default: 2)
+        [--plan-only spec.json]                                # stop after the plan gate; write the spec (staged driver, stage 1)
+        [--from-spec spec.json]                                # skip planning; execute this spec (staged driver, stage 3)
+        [--no-rag]                                             # don't add retrieved prior results to the planner prompt
+
+With $COMPCHEM_DB set, every species goes through the shared results
+database (storage/results_db.py): already-computed species are reused, and
+concurrent campaigns needing the same species compute it once.
 
 Without --auto-approve, this campaign now PAUSES TWICE for a terminal
 prompt: once after planning, once after the critic's review. Existing
@@ -59,6 +66,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
+import os
 from concurrent.futures import ThreadPoolExecutor
 
 from academy.exchange import LocalExchangeFactory
@@ -128,6 +137,26 @@ def parse_args() -> argparse.Namespace:
         "can send the spec back through the planner before the campaign "
         "just finalizes with whatever it currently has (default: 2).",
     )
+    parser.add_argument(
+        "--plan-only",
+        metavar="SPEC_JSON",
+        default=None,
+        help="Plan (and pass the plan gate), write the approved spec to this "
+        "JSON file, and stop - no compute. Stage 1 of the staged driver.",
+    )
+    parser.add_argument(
+        "--from-spec",
+        metavar="SPEC_JSON",
+        default=None,
+        help="Skip planning and execute the spec in this JSON file (written by "
+        "--plan-only). Stage 3 of the staged driver.",
+    )
+    parser.add_argument(
+        "--no-rag",
+        action="store_true",
+        help="Don't add prior results retrieved from $COMPCHEM_DB to the "
+        "planner's prompt (storage/rag.py).",
+    )
     return parser.parse_args()
 
 
@@ -148,7 +177,7 @@ def _abort_report(
     return "\n".join(lines)
 
 
-async def run_campaign(args: argparse.Namespace) -> str:
+async def run_campaign(args: argparse.Namespace) -> str | None:
     if args.ollama:
         backend = "ollama"
     elif args.claude_cli:
@@ -165,13 +194,25 @@ async def run_campaign(args: argparse.Namespace) -> str:
         critic = await manager.launch(CriticAgent())
         reporter = await manager.launch(ReporterAgent())
 
-        if args.question:
+        if args.from_spec:
+            with open(args.from_spec) as f:
+                spec = json.load(f)
+        elif args.question:
             spec = await planner.plan_campaign_from_prompt(
                 question=args.question, model=args.model, backend=backend
             )
         else:
             spec = await planner.plan_campaign(smiles=args.smiles or "O")
         print("Planner spec:", spec)
+
+        if args.plan_only:
+            plan_decision = await request_plan_approval(spec, auto_approve=args.auto_approve)
+            if plan_decision.action == "abort":
+                return _abort_report(spec, plan_decision, stage="plan")
+            with open(args.plan_only, "w") as f:
+                json.dump(spec, f, indent=2, default=str)
+            print(f"Spec written to {args.plan_only}")
+            return None
 
         results: dict | None = None
         verdict: dict | None = None
@@ -244,8 +285,12 @@ async def run_campaign(args: argparse.Namespace) -> str:
 
 def main() -> None:
     args = parse_args()
+    if args.no_rag:
+        os.environ["COMPCHEM_RAG"] = "0"
     with provenance_session():
         report = asyncio.run(run_campaign(args))
+    if report is None:  # --plan-only: the spec file is the output
+        return
 
     out_path = "agentic_campaign_report.md"
     with open(out_path, "w") as f:

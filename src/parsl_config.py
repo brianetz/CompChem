@@ -55,6 +55,7 @@ def get_frontier_config(
     workers_per_node: int,
     worker_init: str,
     interface: str = "hsn0",
+    qos: str | None = None,
 ) -> Config:
     """Frontier config: ONE Slurm block of `nodes` nodes, each running
     `workers_per_node` concurrent Parsl workers - so many tasks share a node
@@ -74,6 +75,7 @@ def get_frontier_config(
                 provider=SlurmProvider(
                     account=account,
                     partition=partition,
+                    qos=qos,
                     nodes_per_block=nodes,
                     init_blocks=1,
                     # Not 0: the driver holds tasks back until the shared

@@ -123,6 +123,8 @@ import anthropic
 from storage.flowcept_store import flowcept_task
 from storage.agent_provenance import agent_llm_invocation_task
 from skills import list_skills
+from storage.rag import build_retrieval_context
+from llm.plan_checks import check_spec, normalize_raw
 
 _DEFAULT_MODEL = "claude-sonnet-5"
 _DEFAULT_OLLAMA_MODEL = "llama3.1"
@@ -153,6 +155,23 @@ homolysis that was asked about, and also is not what "the parent minus one
 bond" actually looks like structurally. Apply the same logic to any other
 molecule or transformation: identify exactly what changes, then write the
 SMILES for exactly what's left on each side.
+
+Worked example 2 - one C-H bond in ethane (CC): the fragments are an ethyl
+radical (SMILES 'C[CH2]', charge 0, multiplicity 2) and a hydrogen atom
+('[H]', charge 0, multiplicity 2). Together they contain exactly the
+parent's atoms (C2H6).
+
+How to write a radical in SMILES:
+- A bracket atom holds exactly ONE element plus its own hydrogens: '[H]',
+  '[OH]', '[CH3]', '[NH2]'. Never put two heavy atoms inside one bracket
+  ('[CH3O]', '[C2H5]' are invalid SMILES).
+- In a larger radical, bracket only the atom that lost the bond, with the
+  hydrogens it still has: ethyl 'C[CH2]', ethoxy 'CC[O]', phenyl
+  '[c]1ccccc1'. Unbracketed atoms get their hydrogens filled in
+  automatically, so the parent's SMILES ('CC') can never describe the
+  radical - a fragment must never repeat the parent's SMILES.
+- Write SMILES, not formulas: water is 'O', not 'H2O'; a hydrogen atom
+  is '[H]', not 'H'.
 
 For every molecule/species you specify, determine:
 - its SMILES string
@@ -267,9 +286,11 @@ def _require_species_dict(obj: Any, what: str) -> dict:
     bounded self-correction retry in _generate_spec_via_llm already used
     for the missing-fragments case, rather than crashing the run."""
     if not isinstance(obj, dict) or "smiles" not in obj:
+        # Say "not a string": a model that sent the object as JSON text
+        # sees a correct-looking value in `got ...` and repeats it otherwise.
         raise ValueError(
-            f"{what} must be an object with a 'smiles' field (and "
-            f"optionally 'charge'/'multiplicity'), got {obj!r}"
+            f"{what} must be a JSON object (not a string) with a 'smiles' field "
+            f"(and optionally 'charge'/'multiplicity'), got {obj!r}"
         )
     return obj
 
@@ -320,6 +341,12 @@ def _spec_from_raw(raw: dict[str, Any], question: str, resolved_model: str) -> d
     if not fragments_raw:
         raise ValueError(
             f"analysis_type={analysis_type!r} but no fragments were provided"
+        )
+    if not isinstance(fragments_raw, list):
+        # e.g. a truncated string that plan_checks.normalize_raw could not
+        # decode - iterating it would complain about single characters.
+        raise ValueError(
+            f"'fragments' must be a JSON array of objects (not a string), got {fragments_raw!r}"
         )
     fragments = [
         _require_species_dict(frag, f"fragments[{i}]")
@@ -422,10 +449,16 @@ def _ollama_attempt(
     import ollama  # local import: optional dependency, only needed for this backend
 
     full_messages = [{"role": "system", "content": system_prompt}] + messages
+    # Model-load options shared by every planner on the server, e.g.
+    # {"use_mmap": false} for a ~430 GB model on Lustre, where mmap page
+    # faults read ~30x slower than a sequential read. Every request must send
+    # the same options, or Ollama reloads the model.
+    options = json.loads(os.environ.get("OLLAMA_CHAT_OPTIONS") or "{}") or None
     response = ollama.chat(
         model=model,
         messages=full_messages,
         tools=[_ollama_tool_schema(t) for t in tools],
+        options=options,
     )
     msg = response.message
     if not msg.tool_calls:
@@ -581,6 +614,7 @@ def _generate_spec_via_llm(
     model: str | None,
     backend: str,
     provenance_action: str,
+    extra_used: dict | None = None,
 ) -> dict:
     """Shared attempt/retry loop behind both generate_campaign_spec_llm and
     generate_revised_campaign_spec_llm: resolve the model, dispatch to the
@@ -610,13 +644,21 @@ def _generate_spec_via_llm(
                 "model": resolved_model,
                 "backend": backend,
                 "attempt": attempt,
+                **(extra_used or {}),
             },
         ) as t:
             raw, assistant_entry, retry_ref = attempt_fn(resolved_model, system_prompt, tools, messages)
             t.end(generated={"tool_input": raw})
 
         try:
-            return _spec_from_raw(raw, question_for_spec, resolved_model)
+            fixed, repairs = normalize_raw(raw)
+            spec = _spec_from_raw(fixed, question_for_spec, resolved_model)
+            problems = check_spec(spec, question_for_spec)
+            if problems:
+                raise ValueError("chemistry check failed: " + "; ".join(problems))
+            if repairs:
+                spec["planner_repairs"] = repairs
+            return spec
         except ValueError as exc:
             last_error = exc
             if attempt >= _MAX_ATTEMPTS:
@@ -663,13 +705,21 @@ def generate_campaign_spec_llm(
     it chooses a fragments-requiring analysis_type but returns no fragments,
     or (Ollama only) doesn't call the tool at all; raises ValueError only if
     that still fails on the second attempt."""
-    return _generate_spec_via_llm(
+    # Retrieval-augmented planning (storage/rag.py): prior results for this
+    # bond type / similar questions go into the user turn - the system
+    # prompt stays fixed. The spec records what was retrieved.
+    context, retrieval = build_retrieval_context(question)
+    content = f"{question}\n\n{context}" if context else question
+    spec = _generate_spec_via_llm(
         question_for_spec=question,
-        initial_messages=[{"role": "user", "content": question}],
+        initial_messages=[{"role": "user", "content": content}],
         model=model,
         backend=backend,
         provenance_action="generate_campaign_spec_llm",
+        extra_used={"retrieval": retrieval},
     )
+    spec["retrieval"] = retrieval
+    return spec
 
 
 def _build_revision_user_message(

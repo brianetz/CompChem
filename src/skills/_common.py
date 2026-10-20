@@ -14,6 +14,8 @@ from engines.rdkit_to_ase import rdkit_mol_to_ase_atoms, smiles_to_ase_atoms
 from engines.xtb_engine import optimize_with_xtb
 from engines.pyscf_engine import singlepoint_energy_pyscf
 from engines.nwchem_engine import singlepoint_energy_nwchem
+from storage.flowcept_store import flowcept_task
+from storage.results_db import get_or_compute_species
 
 # Refinement tier dispatch (Phase 8, partial - architecture plan Sec.19):
 # pyscf and nwchem are interchangeable single-point refinement engines run
@@ -31,7 +33,7 @@ _REFINEMENT_ENGINES = {
 
 def _run_refinement(engine_name: str, symbols, positions, charge, multiplicity, basis, xc) -> dict:
     try:
-        engine_fn = _REFINEMENT_ENGINES[engine_name]
+        engine_fn = _REFINEMENT_ENGINES[engine_name.lower()]
     except KeyError:
         raise ValueError(
             f"Unknown refinement_engine {engine_name!r} - choose one of "
@@ -40,7 +42,58 @@ def _run_refinement(engine_name: str, symbols, positions, charge, multiplicity, 
     return engine_fn(symbols, positions, charge=charge, multiplicity=multiplicity, basis=basis, xc=xc)
 
 
+@flowcept_task
+def species_cache_event(smiles: str, charge: int, multiplicity: int, cache: dict) -> dict:
+    """One provenance record per species lookup (hit / waited / computed),
+    so cache effectiveness and compute saved can be measured from Flowcept
+    records alone."""
+    return dict(cache)
+
+
+def _with_cache(smiles, charge, multiplicity, basis, xc, refinement_engine, protocol, compute) -> dict:
+    """Results-database front door for both species paths below (see
+    storage/results_db.py). With $COMPCHEM_DB unset this just calls
+    compute(). A database problem (lock timeout, I/O error, a malformed
+    species the key can't be built from) never fails the species: it falls
+    back to computing without the cache, keeping the never-raises contract."""
+    try:
+        result = get_or_compute_species(
+            smiles=smiles, charge=charge, multiplicity=multiplicity,
+            engine=refinement_engine, xc=xc, basis=basis, protocol=protocol, compute=compute,
+        )
+    except Exception as exc:
+        print(f"[results-db] cache bypassed for {smiles!r}: {type(exc).__name__}: {exc}")
+        result = compute()
+        result["cache"] = {"key": None, "outcome": "bypassed", "wait_s": 0.0, "saved_wall_s": 0.0,
+                           "error": f"{type(exc).__name__}: {exc}"}
+    if result["cache"]["outcome"] != "disabled":
+        species_cache_event(smiles, charge, multiplicity, result["cache"])
+    return result
+
+
 def compute_species_from_smiles(
+    smiles: str, charge: int, multiplicity: int, basis: str, xc: str,
+    refinement_engine: str = "pyscf",
+) -> dict:
+    """Cached wrapper - see _compute_species_from_smiles."""
+    return _with_cache(
+        smiles, charge, multiplicity, basis, xc, refinement_engine, "smiles-embed",
+        lambda: _compute_species_from_smiles(smiles, charge, multiplicity, basis, xc, refinement_engine),
+    )
+
+
+def compute_species_from_conformer_search(
+    smiles: str, charge: int, multiplicity: int, basis: str, xc: str,
+    refinement_engine: str = "pyscf",
+) -> dict:
+    """Cached wrapper - see _compute_species_from_conformer_search."""
+    return _with_cache(
+        smiles, charge, multiplicity, basis, xc, refinement_engine, "conformer-search",
+        lambda: _compute_species_from_conformer_search(smiles, charge, multiplicity, basis, xc, refinement_engine),
+    )
+
+
+def _compute_species_from_smiles(
     smiles: str, charge: int, multiplicity: int, basis: str, xc: str,
     refinement_engine: str = "pyscf",
 ) -> dict:
@@ -76,7 +129,7 @@ def compute_species_from_smiles(
         }
 
 
-def compute_species_from_conformer_search(
+def _compute_species_from_conformer_search(
     smiles: str, charge: int, multiplicity: int, basis: str, xc: str,
     refinement_engine: str = "pyscf",
 ) -> dict:

@@ -1,0 +1,74 @@
+# BDE plan critic
+
+Use this to review a planner-produced BDE campaign spec (`analysis_type == "bde"`) before it is approved or executed, and to give the planner specific, fixable feedback. The same instructions work as the system prompt for an LLM critic or as a human review checklist.
+
+## Division of labor
+
+Run the deterministic validator first (`critique_plan(spec)` in `analysis/bde_plan_validator.py`), then apply the judgment-based rubric below to what the code cannot decide. Code answers: do the electron counts, parity, atom balance, and cleaved bond check out? Your judgment answers: is the rationale complete, honest, and chemically sensible for the question that was asked? Never overrule a code FAIL with prose. If the code and the rationale disagree, the code wins and the rationale is wrong.
+
+## Inputs
+
+The spec: `parent {smiles, charge, multiplicity}`, `fragments [{smiles, charge, multiplicity}]`, `basis`, `xc`, `rationale`, optionally `bond_cleaved {atom_indices}`, plus the user's original question. Atom indices follow `Chem.AddHs(Chem.MolFromSmiles(smiles))` ordering.
+
+## Procedure
+
+1. **Restate the task.** In one sentence, which bond does the question ask about, and in which molecule? If the question is ambiguous (for example "the weakest C-H bond"), the plan must cover every symmetry-unique candidate (`enumerate_bde_candidates`), not one arbitrary bond.
+2. **Run the validator** and list every WARN and FAIL.
+3. **Check the chemistry the validator cannot:**
+   - Is this single-bond homolysis (parent -> two radical fragments) rather than full atomization, heterolysis, or a ring-opening? Ring bonds give one diradical, not two fragments.
+   - Does the chosen bond match what the user asked about?
+   - For diradicals, carbenes, and isolated atoms: is the singlet/triplet choice justified, and is it the ground state?
+   - Is the method sensible: unrestricted treatment for open-shell species, same functional and basis for every species, diffuse functions if anions are involved?
+4. **Grade the rationale** against the rubric below.
+5. **Return a verdict** (PASS / WARN / FAIL) with a short list of specific, actionable corrections. Quote the offending phrase; do not say "be more precise".
+
+## Rationale rubric
+
+A vetted rationale does all of the following:
+
+1. **Names the bond** that breaks (for example "one O-H bond of water") and says what remains intact.
+2. **Accounts for electrons per species**: charge, TOTAL electron count, multiplicity, and the parity argument (odd electron count means even multiplicity). Total and valence electrons are different numbers: the hydroxyl radical has 9 total electrons and 7 valence electrons. Any number in the prose must equal the computed one, and the label (total vs valence) must be right.
+3. **States the parent's spin state** (for example closed-shell singlet).
+4. **Contrasts the correct answer with the likely mistake**: single-bond homolysis versus full atomization. This is the failure the planner has actually made.
+5. **Describes each stage and why**: xtb geometry optimization as a cheap prescreen, then a DFT single-point refinement on those geometries.
+6. **Justifies the level of theory for this chemistry** (radicals, main-group thermochemistry), and names the same basis and functional that the spec uses.
+7. **Writes out the formula and units**: BDE = sum of fragment energies - parent energy, in kcal/mol.
+8. **Declares the target quantity**: electronic-energy BDE, or one with ZPE/thermal corrections. The current pipeline computes the electronic-only value, so the rationale must not imply a 298 K enthalpy.
+
+### Reference examples
+
+Good (water O-H):
+
+> Breaking one O-H bond of water (H-O-H) leaves the other O-H bond intact, giving hydroxyl radical ([OH], neutral doublet: 9 total electrons (7 valence), odd, consistent with multiplicity 2) plus a hydrogen atom ([H], neutral doublet: 1 electron, odd, consistent with multiplicity 2), not full atomization into O + 2H. Parent water is a closed-shell singlet (charge 0, multiplicity 1). Workflow: GFN2-xTB geometry optimization of parent and both fragments as a cheap prescreen, then a B3LYP/def2-TZVP DFT single point at those geometries (unrestricted for the radicals). BDE = E(OH) + E(H) - E(H2O), converted to kcal/mol. This is an electronic-energy BDE without ZPE or thermal corrections.
+
+Weak (omits electron accounting, parent state, formula, units, target quantity, stage purposes):
+
+> Breaking one O-H bond in water leaves the other O-H bond intact, giving hydroxyl radical ([OH], doublet) plus a hydrogen atom ([H], doublet) rather than full atomization into O+H+H. A GFN2-xTB prescreen gives cheap geometries, followed by B3LYP/def2-TZVP single-point refinement, a standard accurate combination for BDEs of small main-group molecules.
+
+## Radical and electronic-structure checks (code-backed)
+
+For every species, the validator recomputes: total electrons from the SMILES with explicit hydrogens and the stated charge; parity against the stated multiplicity; radical centres versus multiplicity (one radical centre must be a doublet; two need an explicit singlet/triplet justification; none with multiplicity above 1 is suspect); formal charge versus stated charge; ground-state multiplicity for isolated atoms (H 2, C 3, N 4, O 3, and so on); and atom and charge conservation from parent to fragments. A FAIL on any of these means the plan must be revised, not explained.
+
+## Confirming the bond and radical location
+
+- **Before compute:** the validator homolyses each single bond of the parent in turn and compares the resulting fragments (radical positions included, via canonical SMILES) with the planned fragments. No match means the plan is wrong: wrong bond, radical on the wrong atom, or not a single-bond homolysis. Multiple symmetry classes matching means the planner should declare `bond_cleaved`.
+- **After compute:** check <S^2> against s(s+1) for the stated multiplicity (conventional bands: more than 10% off warns, more than 25% fails); check that the Mulliken spin population sits on the atom the plan put the radical on (`check_spin`, with `expected_radical_atoms`); re-perceive connectivity from the optimized xtb geometry and compare with the planned fragment to catch rearrangement or further dissociation (`check_connectivity`); and sanity-check the final BDE value (`check_bde_value`). Delocalized radicals legitimately spread spin; treat a low localization score as a prompt to look, not as proof of an error.
+
+## Output format
+
+Return:
+
+- **Verdict:** PASS, WARN, or FAIL.
+- **Failed checks:** each with the quoted evidence and the exact fix.
+- **Warnings:** each with a one-line suggestion.
+- **Revised rationale** only when asked.
+
+Keep feedback short enough to send back to the planner as one corrective turn. Allow a single bounded retry, as the planner's existing self-correction does.
+
+## Extending to new analysis types
+
+Keep the core checks (spec shape, electron accounting, method consistency, rationale rubric) and add one module per analysis, registered like the other skills. Examples: redox requires a charge change of one with the right multiplicity change between states and a stated reference electrode; Marcus theory requires reactant and product states with consistent charges plus a reorganization-energy definition; IR requires an optimized closed-shell structure and a check for imaginary frequencies. Update the rubric and examples above each time.
+
+## Known limits
+
+The validator cannot judge whether the planner chose the bond the user meant; that remains your judgment against the original question. It does not know experimental BDEs, so the value check is only a coarse sanity band. Add a reference table with verified values before relying on comparisons.
