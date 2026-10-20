@@ -104,6 +104,11 @@ def parse_args() -> argparse.Namespace:
                         "round-robin moderator (agents/plan_discussion.py)")
     p.add_argument("--plan-chat-rounds", type=int, default=3,
                    help="Maximum discussion rounds with --plan-chat (default: 3)")
+    p.add_argument("--plan-board", action="store_true",
+                   help="Build each plan module by module on a shared board reviewed by the "
+                        "Validator and the plan critic (agents/plan_board.py)")
+    p.add_argument("--plan-board-attempts", type=int, default=3,
+                   help="Attempts per module with --plan-board (default: 3)")
     p.add_argument("--claude-model", default=None, help="Only used with --backend claude_cli")
     p.add_argument("--db", default=None,
                    help="Shared results database (SQLite on Lustre), e.g. "
@@ -257,6 +262,8 @@ def main() -> None:
                               *backend_args(args), *(["--no-rag"] if args.no_rag else []),
                               *(["--plan-chat", "--plan-chat-rounds", str(args.plan_chat_rounds)]
                                 if args.plan_chat else []),
+                              *(["--plan-board", "--plan-board-attempts", str(args.plan_board_attempts)]
+                                if args.plan_board else []),
                               "--auto-approve", *extra])
             return run_cmd(shlex.quote(str(task_dir)), cmd, stdout=log, stderr=log)
 

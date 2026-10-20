@@ -171,7 +171,49 @@ def parse_args() -> argparse.Namespace:
         default=3,
         help="Maximum discussion rounds with --plan-chat (default: 3).",
     )
+    parser.add_argument(
+        "--plan-board",
+        action="store_true",
+        help="Build the --question plan module by module on a shared board: the "
+        "Planner publishes each module, the Validator and the plan critic "
+        "($COMPCHEM_PLAN_CRITIC_SKILL, default src/bde-plan-critic.md) review "
+        "it, and a supervising moderator accepts modules and the final plan "
+        "(agents/plan_board.py).",
+    )
+    parser.add_argument(
+        "--plan-board-attempts",
+        type=int,
+        default=3,
+        help="Attempts per module with --plan-board (default: 3).",
+    )
     return parser.parse_args()
+
+
+async def _plan_on_board(manager, args: argparse.Namespace, backend: str) -> dict:
+    """Launch the plan-board agents for one question and return the plan
+    they agreed on (raises ValueError if none passed)."""
+    from agents.plan_board import (
+        BoardCriticAgent, BoardPlannerAgent, BoardValidatorAgent, PlanBoard, PlanBoardModerator,
+    )
+    from storage.rag import build_retrieval_context
+
+    board = await manager.launch(PlanBoard())
+    planner = await manager.launch(BoardPlannerAgent, kwargs={"board": board, "backend": backend, "model": args.model})
+    validator = await manager.launch(BoardValidatorAgent, kwargs={"board": board})
+    critic = await manager.launch(BoardCriticAgent, kwargs={"board": board, "backend": backend, "model": args.model})
+    moderator = await manager.launch(PlanBoardModerator, kwargs={
+        "board": board, "planner": planner, "validator": validator, "critic": critic,
+        "backend": backend, "model": args.model, "max_attempts": args.plan_board_attempts})
+    context, retrieval = build_retrieval_context(args.question)
+    result = await moderator.plan(args.question, context)
+    print("Plan board:", result["outcome"], "after", len(result["rounds"]), "reviewed round(s);",
+          "supervisor:", result["supervisor"] or "no action")
+    if result["spec"] is None:
+        raise ValueError(f"plan board ended without a valid plan ({result['outcome']}): {result['rounds']}")
+    spec = result["spec"]
+    spec["retrieval"] = retrieval
+    spec["plan_board"] = {k: result[k] for k in ("outcome", "rounds", "supervisor", "final_reviews", "board")}
+    return spec
 
 
 async def _plan_by_discussion(manager, args: argparse.Namespace, backend: str) -> dict:
@@ -246,6 +288,8 @@ async def run_campaign(args: argparse.Namespace) -> str | None:
         if args.from_spec:
             with open(args.from_spec) as f:
                 spec = json.load(f)
+        elif args.question and args.plan_board:
+            spec = await _plan_on_board(manager, args, backend)
         elif args.question and args.plan_chat:
             spec = await _plan_by_discussion(manager, args, backend)
         elif args.question:
