@@ -43,6 +43,8 @@ def main():
         "Python repr": {**BASE, "parent": "{'smiles': 'CO', 'charge': 0, 'multiplicity': 1}",
                         "fragments": "[{'smiles': '[H]', 'charge': 0, 'multiplicity': 2}, "
                                      "{'smiles': 'C[O]', 'charge': 0, 'multiplicity': 2}]"},
+        "uppercase keys": {**BASE, "parent": '{"SMILES": "CO", "Charge": 0, "Multiplicity": 1}',
+                           "fragments": [frag("C[O]"), H]},
         "flattened parent": {**BASE, "parent_smiles": "CO", "parent_charge": 0,
                              "parent_multiplicity": 1, "fragments": [frag("C[O]"), H]},
     }

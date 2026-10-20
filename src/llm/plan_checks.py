@@ -43,6 +43,9 @@ def _decode(value: Any) -> Any:
 
 def _fix_species(obj: Any) -> Any:
     obj = _decode(obj)
+    if isinstance(obj, dict):
+        # Found 2026-10-20 (plan board, B2): 405B sent {"SMILES": "CO", ...}.
+        obj = {k.lower() if isinstance(k, str) else k: v for k, v in obj.items()}
     if isinstance(obj, dict) and isinstance(obj.get("smiles"), str):
         smiles = obj["smiles"].strip()
         obj = {**obj, "smiles": _SMILES_ALIASES.get(smiles, smiles)}
