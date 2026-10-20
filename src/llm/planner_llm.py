@@ -125,6 +125,13 @@ from storage.agent_provenance import agent_llm_invocation_task
 from skills import list_skills
 from storage.rag import build_retrieval_context
 from llm.plan_checks import check_spec, normalize_raw
+from llm.plan_critic_llm import review_plan, skill_path as plan_critic_skill
+
+
+def _critic_review(spec: dict, question: str, backend: str, model: str) -> dict:
+    from analysis.bde_plan_validator import critique_plan
+
+    return review_plan(spec, question, critique_plan(spec, question), backend=backend, model=model)
 
 _DEFAULT_MODEL = "claude-sonnet-5"
 _DEFAULT_OLLAMA_MODEL = "llama3.1"
@@ -394,7 +401,7 @@ def _anthropic_attempt(
         max_tokens=1024,
         system=system_prompt,
         tools=tools,
-        tool_choice={"type": "tool", "name": "emit_campaign_spec"},
+        tool_choice={"type": "tool", "name": tools[0]["name"]},
         messages=messages,
     )
     tool_use = next(block for block in response.content if block.type == "tool_use")
@@ -631,6 +638,9 @@ def _generate_spec_via_llm(
     messages = list(initial_messages)
 
     last_error: Exception | None = None
+    # Per-attempt outcome of every check (shape, validator, LLM critic),
+    # attached to the returned spec so plan accuracy can be measured.
+    review_log: list[dict] = []
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         # One PROV-AGENT 'AIModelInvocation' record per actual LLM call -
         # architecture plan Sec.18. A bounded self-correction retry (below)
@@ -652,12 +662,28 @@ def _generate_spec_via_llm(
 
         try:
             fixed, repairs = normalize_raw(raw)
-            spec = _spec_from_raw(fixed, question_for_spec, resolved_model)
+            try:
+                spec = _spec_from_raw(fixed, question_for_spec, resolved_model)
+            except ValueError as exc:
+                review_log.append({"attempt": attempt, "stage": "shape", "verdict": "FAIL", "detail": str(exc)})
+                raise
             problems = check_spec(spec, question_for_spec)
             if problems:
+                review_log.append({"attempt": attempt, "stage": "validator", "verdict": "FAIL", "detail": problems})
                 raise ValueError("chemistry check failed: " + "; ".join(problems))
+            review_log.append({"attempt": attempt, "stage": "validator", "verdict": "PASS",
+                               "fragments": [f["smiles"] for f in spec.get("fragments") or []]})
+            if spec.get("analysis_type") == "bde" and plan_critic_skill():
+                review = _critic_review(spec, question_for_spec, backend, resolved_model)
+                review_log.append({"attempt": attempt, "stage": "critic", **review})
+                # A critic FAIL earns the bounded retry; on the last attempt
+                # the plan stands (the validator passed it) and the verdict
+                # is kept for the report instead.
+                if review["verdict"] == "FAIL" and attempt < _MAX_ATTEMPTS:
+                    raise ValueError("plan critic FAIL: " + "; ".join(review["failed_checks"] or ["(no detail)"]))
             if repairs:
                 spec["planner_repairs"] = repairs
+            spec["plan_review_log"] = review_log
             return spec
         except ValueError as exc:
             last_error = exc

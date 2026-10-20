@@ -116,6 +116,13 @@ def check_spec(spec: dict, question: str) -> list[str]:
 
     if spec.get("analysis_type") == "single_point":
         return _species_problems(spec, "the molecule", None)
+    if spec.get("analysis_type") == "bde":
+        # The bde-plan-critic skill's deterministic validator: a superset of
+        # the checks below (adds radical centres, formal charge, atom ground
+        # states, charge balance, and an explicit homolysis match).
+        from analysis.bde_plan_validator import critique_plan, problems_as_text
+
+        return problems_as_text(critique_plan(spec, question)["fails"])
 
     parent = spec["parent"]
     fragments = spec.get("fragments") or []
