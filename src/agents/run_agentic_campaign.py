@@ -157,7 +157,56 @@ def parse_args() -> argparse.Namespace:
         help="Don't add prior results retrieved from $COMPCHEM_DB to the "
         "planner's prompt (storage/rag.py).",
     )
+    parser.add_argument(
+        "--plan-chat",
+        action="store_true",
+        help="Plan --question as a group chat of Academy agents (Planner, "
+        "Validator, and the plan critic if $COMPCHEM_PLAN_CRITIC_SKILL is set) "
+        "under a round-robin moderator that supervises the discussion "
+        "(agents/plan_discussion.py), instead of the planner's single retry.",
+    )
+    parser.add_argument(
+        "--plan-chat-rounds",
+        type=int,
+        default=3,
+        help="Maximum discussion rounds with --plan-chat (default: 3).",
+    )
     return parser.parse_args()
+
+
+async def _plan_by_discussion(manager, args: argparse.Namespace, backend: str) -> dict:
+    """Launch the plan-discussion agents for one question and return the
+    spec the discussion agreed on (raises ValueError if none passed)."""
+    from agents.plan_discussion import (
+        CriticChatAgent, PlanDiscussionManager, PlannerChatAgent, ValidatorChatAgent,
+    )
+    from llm.planner_llm import _resolve_model
+    from llm.plan_critic_llm import skill_path
+    from storage.rag import build_retrieval_context
+
+    model = _resolve_model(backend, args.model)
+    participants = [
+        await manager.launch(PlannerChatAgent(backend, args.model)),
+        await manager.launch(ValidatorChatAgent(model)),
+    ]
+    if skill_path():
+        participants.append(await manager.launch(CriticChatAgent(backend, args.model)))
+    moderator = await manager.launch(
+        PlanDiscussionManager,
+        kwargs={"participants": participants, "backend": backend, "model": args.model,
+                "max_rounds": args.plan_chat_rounds},
+    )
+    context, retrieval = build_retrieval_context(args.question)
+    result = await moderator.plan(args.question, context)
+    print("Plan discussion:", result["outcome"], "after", len(result["rounds"]), "round(s);",
+          "supervisor:", result["supervisor"] or "no action")
+    if result["spec"] is None:
+        raise ValueError(f"plan discussion ended without a valid plan ({result['outcome']}): "
+                         f"{result['rounds']}")
+    spec = result["spec"]
+    spec["retrieval"] = retrieval
+    spec["plan_discussion"] = {k: result[k] for k in ("outcome", "rounds", "supervisor", "history")}
+    return spec
 
 
 def _abort_report(
@@ -197,6 +246,8 @@ async def run_campaign(args: argparse.Namespace) -> str | None:
         if args.from_spec:
             with open(args.from_spec) as f:
                 spec = json.load(f)
+        elif args.question and args.plan_chat:
+            spec = await _plan_by_discussion(manager, args, backend)
         elif args.question:
             spec = await planner.plan_campaign_from_prompt(
                 question=args.question, model=args.model, backend=backend

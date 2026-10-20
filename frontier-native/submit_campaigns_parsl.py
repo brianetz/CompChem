@@ -98,6 +98,12 @@ def parse_args() -> argparse.Namespace:
                    help="Path to a plan-critic skill .md (e.g. <repo-src>/bde-plan-critic.md): "
                         "the planner's model reviews each validated BDE plan with it and a FAIL "
                         "earns the planner's one retry. Needs a --repo-src that has the critic")
+    p.add_argument("--plan-chat", action="store_true",
+                   help="Plan each question as a group chat of Academy agents (Planner, "
+                        "Validator, plan critic with --plan-critic-skill) under a supervising "
+                        "round-robin moderator (agents/plan_discussion.py)")
+    p.add_argument("--plan-chat-rounds", type=int, default=3,
+                   help="Maximum discussion rounds with --plan-chat (default: 3)")
     p.add_argument("--claude-model", default=None, help="Only used with --backend claude_cli")
     p.add_argument("--db", default=None,
                    help="Shared results database (SQLite on Lustre), e.g. "
@@ -249,6 +255,8 @@ def main() -> None:
             task_dir = run_dir / f"task_{i}" / subdir if subdir else run_dir / f"task_{i}"
             cmd = shlex.join(["python", "-m", "agents.run_agentic_campaign", "--question", args.task_questions[i],
                               *backend_args(args), *(["--no-rag"] if args.no_rag else []),
+                              *(["--plan-chat", "--plan-chat-rounds", str(args.plan_chat_rounds)]
+                                if args.plan_chat else []),
                               "--auto-approve", *extra])
             return run_cmd(shlex.quote(str(task_dir)), cmd, stdout=log, stderr=log)
 
