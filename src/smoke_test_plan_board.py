@@ -8,6 +8,7 @@ Run:
 from __future__ import annotations
 
 import asyncio
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 from academy.exchange import LocalExchangeFactory
@@ -40,6 +41,7 @@ def stub(model, system_prompt, tools, messages):
     name, msg = tools[0]["name"], messages[0]["content"]
     if name.startswith("publish_"):
         PROMPTS.append(system_prompt)
+        time.sleep(S.get("delay", 0))
         return S[name[len("publish_"):]].pop(0), None, None
     if name == "emit_module_review":
         assert "BDE plan critic" in system_prompt
@@ -59,7 +61,7 @@ P._BACKENDS["stub"] = (stub, lambda *a: a[0])
 OK = {"verdict": "ACCEPT", "reopen": [], "issues": []}
 
 
-async def run(script):
+async def run(script, **moderator):
     S.clear(); S.update({k: list(v) if isinstance(v, list) else v for k, v in script.items()})
     S.setdefault("final", [OK])
     PROMPTS.clear()
@@ -70,7 +72,8 @@ async def run(script):
         validator = await m.launch(BoardValidatorAgent, kwargs={"board": board})
         critic = await m.launch(BoardCriticAgent, kwargs=kw)
         mod = await m.launch(PlanBoardModerator, kwargs={"board": board, "planner": planner, "validator": validator,
-                                                         "critic": critic, "backend": "stub", "model": "m"})
+                                                         "critic": critic, "backend": "stub", "model": "m",
+                                                         **moderator})
         return await mod.plan(TQ, "")
 
 
@@ -111,11 +114,23 @@ async def main():
     show("D", r)
     assert r["spec"] is not None and r["spec"]["critic_unresolved"] == ["rationale"]
 
-    # E: no valid target -> no plan.
+    # E: with a cap of 3 attempts, no valid target -> no plan.
     bad = {"analysis_type": "bde", "parent": {"smiles": "[CH3O]", "charge": 0, "multiplicity": 1}, "bond": "C-H"}
-    r = await run({"target": [bad] * 3})
+    r = await run({"target": [bad] * 3}, max_attempts=3)
     show("E", r)
     assert r["spec"] is None and r["outcome"] == "no valid target"
+
+    # F: no cap (default): wrong 4 times, then right -> edit, then escalate, then a plan.
+    r = await run({**base, "target": [bad] * 4 + [TARGET], "fragments": [frags("[CH2]c1ccccc1")]})
+    show("F", r)
+    assert r["outcome"] == "passed" and [s["action"] for s in r["supervisor"]] == ["PAUSE+EDIT", "PAUSE+ESCALATE"]
+    assert any("Use the publish tool's exact field names" in p for p in PROMPTS)
+
+    # G: never valid -> stops when the time budget runs out, not after N attempts.
+    r = await run({"target": [bad] * 1000, "delay": 0.05}, deadline_s=0.5)
+    show("G", (r | {"rounds": r["rounds"][-2:]}))
+    assert r["spec"] is None and r["outcome"] == "no valid target (planning time budget used up)"
+    assert len(r["rounds"]) > 3
 
     print("\nOK: plan board behaves as expected.")
 

@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 import logging
 import os
 from typing import Any
@@ -123,6 +124,12 @@ _MODULE_FOCUS = {
     "method": "Is the functional/basis appropriate for open-shell main-group thermochemistry and usable for every species? Prefer a method already cached unless the question asks otherwise.",
     "rationale": "Apply the rationale rubric. REVISE only for wrong statements or rubric items that are missing.",
 }
+
+
+# Found 2026-10-20 (B2): the supervisor's example repeated the Planner's
+# uppercase "SMILES" key and a formula ("CH3OH") as SMILES.
+_EDIT_FIELD_NAMES = (" Any example you give must use the publish tool's exact field names - lowercase smiles, "
+                     "charge, multiplicity - and valid SMILES (methanol is 'CO', not 'CH3OH').")
 
 
 def _critic_instructions(module: str | None) -> str:
@@ -381,12 +388,19 @@ class PlanBoardModerator(Agent):
 
     def __init__(self, board: Handle[PlanBoard], planner: Handle[BoardPlannerAgent],
                  validator: Handle[BoardValidatorAgent], critic: Handle[BoardCriticAgent], *,
-                 backend: str, model: str | None = None, max_attempts: int = 3, reopen_budget: int = 1) -> None:
+                 backend: str, model: str | None = None, max_attempts: int | None = None,
+                 deadline_s: float | None = 3 * 60, critic_revise_limit: int = 3,
+                 reopen_budget: int = 1) -> None:
         super().__init__()
         self.board, self.planner, self.validator, self.critic = board, planner, validator, critic
         self.backend = backend
         self.model = P._resolve_model(backend, model)
-        self.max_attempts, self.reopen_budget = max_attempts, reopen_budget
+        # max_attempts None/0: keep going until the module is accepted or the
+        # planning time budget (deadline_s) runs out.
+        self.max_attempts, self.reopen_budget = max_attempts or None, reopen_budget
+        self.deadline_s, self.critic_revise_limit = deadline_s, critic_revise_limit
+        self.started = time.monotonic()
+        self.timed_out = False
         self.rounds: list[dict] = []
         self.supervisor_log: list[dict] = []
         self.running = asyncio.Event()
@@ -395,10 +409,17 @@ class PlanBoardModerator(Agent):
         self.round_done = asyncio.Event()
         self.round_checked = asyncio.Event()
 
+    def _out_of_time(self) -> bool:
+        return self.deadline_s is not None and time.monotonic() - self.started > self.deadline_s
+
     async def _build_module(self, module: str) -> bool:
-        last_validated = None
+        last_validated, revisions, attempt = None, 0, 0
         self.terminate.clear()
-        for attempt in range(1, self.max_attempts + 1):
+        while self.max_attempts is None or attempt < self.max_attempts:
+            if self._out_of_time():
+                self.timed_out = True
+                break
+            attempt += 1
             await self.running.wait()
             entry_id = await self.planner.publish(module)
             val = await self.validator.evaluate(entry_id)
@@ -411,6 +432,12 @@ class PlanBoardModerator(Agent):
             if val["verdict"] == "PASS" and crit in ("ACCEPT", "ERROR"):
                 await self.board.accept(module, entry_id)
                 return True
+            if val["verdict"] == "PASS":
+                # The critic's veto is bounded: after critic_revise_limit
+                # rejections of validated versions, keep the last one.
+                revisions += 1
+                if revisions >= self.critic_revise_limit:
+                    break
             self.round_checked.clear()
             self.round_done.set()
             await self.round_checked.wait()
@@ -426,12 +453,14 @@ class PlanBoardModerator(Agent):
         """Build the plan for one question. Returns {'spec' (None on failure),
         'outcome', 'rounds', 'supervisor', 'final_reviews', 'board'}."""
         await self.board.reset(question, context)
+        self.started, self.timed_out = time.monotonic(), False
         todo, final_reviews, outcome, spec = list(MODULES), [], "failed", None
         while True:
             for module in todo:
                 if not await self._build_module(module):
                     snap = await self.board.snapshot()
-                    return {"spec": None, "outcome": f"no valid {module}", "rounds": self.rounds,
+                    why = " (planning time budget used up)" if self.timed_out else ""
+                    return {"spec": None, "outcome": f"no valid {module}{why}", "rounds": self.rounds,
                             "supervisor": self.supervisor_log, "final_reviews": final_reviews, "board": snap}
             snap = await self.board.snapshot()
             acc = snap["accepted"]
@@ -464,8 +493,10 @@ class PlanBoardModerator(Agent):
     @loop
     async def supervise(self, shutdown: asyncio.Event) -> None:
         """After every rejected round: a repeated Validator failure on the
-        same module means the Planner is going in circles - pause, correct
-        its prompt, or terminate the module if a correction already failed."""
+        same module means the Planner is going in circles - pause and
+        correct its prompt. A repeat after that correction escalates to the
+        Validator's exact fixes (unbounded mode) or terminates the module
+        (with a max_attempts cap)."""
         while not shutdown.is_set():
             try:
                 await asyncio.wait_for(self.round_done.wait(), timeout=1.0)
@@ -481,19 +512,30 @@ class PlanBoardModerator(Agent):
         sigs = [r["signature"] for r in self.rounds if r["module"] == self.rounds[-1]["module"]]
         if len(sigs) < 2 or not sigs[-1] or sigs[-1] != sigs[-2]:
             return
-        if any(e["signature"] == sigs[-1] for e in self.supervisor_log):
+        edits = [e for e in self.supervisor_log if e["signature"] == sigs[-1] and e["action"].startswith("PAUSE")]
+        if edits and self.max_attempts is not None:
             self.supervisor_log.append({"round": self.rounds[-1]["round"], "action": "TERMINATE",
                                         "signature": sigs[-1], "reason": "same mistake after a correction"})
             self.terminate.set()
             return
+        if len(edits) >= 2:
+            return  # already escalated for this mistake; keep going until the time budget
         self.running.clear()  # PAUSE
         try:
             snap = await self.board.snapshot()
-            instruction, diagnosis = await self.agent_run_sync(self._write_instruction, snap)
+            if edits:  # second time: no more LLM wording, the Validator's own fixes
+                last = [e for e in snap["entries"] if e["module"] == self.rounds[-1]["module"]][-1]
+                instruction = ("You repeated this mistake after a correction. Fix exactly what the Validator "
+                               "says: " + " | ".join(n for r in last["reviews"] for n in r["notes"])[:1500]
+                               + " Use the publish tool's exact field names: smiles, charge, multiplicity.")
+                diagnosis, action = "repeated after the first correction", "PAUSE+ESCALATE"
+            else:
+                instruction, diagnosis = await self.agent_run_sync(self._write_instruction, snap)
+                action = "PAUSE+EDIT"
             prompt = await self.planner.get_prompt()
             await self.planner.update_prompt(prompt + "\n\nSupervisor instruction (added after a repeated "
                                              "mistake): " + instruction)
-            self.supervisor_log.append({"round": self.rounds[-1]["round"], "action": "PAUSE+EDIT",
+            self.supervisor_log.append({"round": self.rounds[-1]["round"], "action": action,
                                         "signature": sigs[-1], "diagnosis": diagnosis, "instruction": instruction})
         finally:
             self.running.set()
@@ -505,7 +547,7 @@ class PlanBoardModerator(Agent):
         with agent_llm_invocation_task("PlanBoardModerator", "supervisor_edit",
                                        used={"model": self.model, "backend": self.backend, "module": module}) as t:
             try:
-                raw, _, _ = attempt_fn(self.model, _EDIT_PROMPT, [_INSTRUCTION_TOOL],
+                raw, _, _ = attempt_fn(self.model, _EDIT_PROMPT + _EDIT_FIELD_NAMES, [_INSTRUCTION_TOOL],
                                        [{"role": "user", "content": "Validator reviews are on the board.\n\n"
                                                                     + board[-12000:]}])
                 instruction = str(raw.get("instruction") or "").strip()

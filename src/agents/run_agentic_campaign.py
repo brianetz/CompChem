@@ -183,8 +183,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--plan-board-attempts",
         type=int,
-        default=3,
-        help="Attempts per module with --plan-board (default: 3).",
+        default=0,
+        help="Attempts per module with --plan-board; 0 (default) keeps going "
+        "until the module is accepted or the time budget runs out.",
+    )
+    parser.add_argument(
+        "--plan-board-deadline-min",
+        type=float,
+        default=3.0,
+        help="Planning time budget per campaign with --plan-board, in minutes "
+        "(default: 3). Checked between rounds, so a model call in flight "
+        "finishes first.",
     )
     return parser.parse_args()
 
@@ -203,7 +212,8 @@ async def _plan_on_board(manager, args: argparse.Namespace, backend: str) -> dic
     critic = await manager.launch(BoardCriticAgent, kwargs={"board": board, "backend": backend, "model": args.model})
     moderator = await manager.launch(PlanBoardModerator, kwargs={
         "board": board, "planner": planner, "validator": validator, "critic": critic,
-        "backend": backend, "model": args.model, "max_attempts": args.plan_board_attempts})
+        "backend": backend, "model": args.model, "max_attempts": args.plan_board_attempts,
+        "deadline_s": args.plan_board_deadline_min * 60})
     context, retrieval = build_retrieval_context(args.question)
     result = await moderator.plan(args.question, context)
     print("Plan board:", result["outcome"], "after", len(result["rounds"]), "reviewed round(s);",
