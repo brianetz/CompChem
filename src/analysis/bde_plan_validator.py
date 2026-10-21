@@ -43,6 +43,55 @@ def _item(check: str, evidence: str, fix: str, species: str | None = None) -> di
     return {"check": check, "species": species, "evidence": evidence, "fix": fix}
 
 
+# Site words a question may use, and the site labels that satisfy each.
+_SITE_WORDS = {
+    "benzylic": "benzylic", "allylic": "allylic", "vinylic": "vinylic",
+    "aromatic": "aromatic", "aryl": "aromatic", "phenyl": "aromatic", "ring": "aromatic",
+    "ortho": "ortho", "meta": "meta", "para": "para",
+    "primary": "primary", "secondary": "secondary", "tertiary": "tertiary",
+    "methyl": "methyl", "hydroxyl": "hydroxyl", "phenolic": "hydroxyl",
+}
+
+
+def site_words_in(question: str) -> list[str]:
+    """Site labels the question asks for, e.g. ['benzylic']."""
+    import re
+
+    words = re.findall(r"[a-z]+", (question or "").lower())
+    return sorted({_SITE_WORDS[w] for w in words if w in _SITE_WORDS})
+
+
+def _site_of(parent, idx: int) -> str:
+    """Site type of the heavy atom an X-H bond is broken at, e.g.
+    'benzylic', 'aromatic, para', 'secondary', 'hydroxyl'."""
+    atom = parent.GetAtomWithIdx(idx)
+    el = atom.GetSymbol()
+    if el == "O":
+        return "hydroxyl"
+    if el != "C":
+        return {"N": "amine", "S": "thiol"}.get(el, el)
+    heavy = [n for n in atom.GetNeighbors() if n.GetAtomicNum() > 1]
+    if atom.GetIsAromatic():
+        ring = parent.GetRingInfo()
+        subst = [a.GetIdx() for a in parent.GetAtoms()
+                 if a.GetIsAromatic() and a.GetIdx() != idx and ring.NumAtomRings(a.GetIdx())
+                 and any(n.GetAtomicNum() > 1 and not n.GetIsAromatic() for n in a.GetNeighbors())]
+        if subst:
+            from rdkit import Chem
+            d = min(len(Chem.GetShortestPath(parent, idx, j)) - 1 for j in subst)
+            pos = {1: "ortho", 2: "meta", 3: "para"}.get(d)
+            return "aromatic" + (f", {pos}" if pos else "")
+        return "aromatic"
+    if any(n.GetIsAromatic() for n in heavy):
+        return "benzylic"
+    if atom.GetHybridization().name == "SP2":
+        return "vinylic"
+    if any(b.GetBondTypeAsDouble() == 2.0 and b.GetOtherAtom(n).GetIdx() != idx
+           for n in heavy for b in n.GetBonds()):
+        return "allylic"
+    return {0: "methyl", 1: "primary", 2: "secondary", 3: "tertiary"}.get(len(heavy), "quaternary")
+
+
 def enumerate_bde_candidates(parent_smiles: str) -> list[dict]:
     """Every symmetry-unique single bond of the parent (explicit H), with
     the two radical fragments its homolysis gives. Ring bonds are skipped:
@@ -73,9 +122,12 @@ def enumerate_bde_candidates(parent_smiles: str) -> list[dict]:
         a1, a2 = bond.GetBeginAtom(), bond.GetEndAtom()
         if a1.GetAtomicNum() < a2.GetAtomicNum():
             a1, a2 = a2, a1
+        heavy_end = [a.GetIdx() for a in (a1, a2) if a.GetAtomicNum() > 1]
+        site = _site_of(parent, heavy_end[0]) if len(heavy_end) == 1 else ""
         out.append({
             "atom_indices": [i, j],
             "bond": f"{a1.GetSymbol()}{_BOND_SYMBOL.get(bond.GetBondTypeAsDouble(), '~')}{a2.GetSymbol()}",
+            "site": site,
             "fragments": sorted(_canonical(p) for p in pieces),
         })
     return out
@@ -188,6 +240,16 @@ def critique_plan(spec: dict, question: str | None = None) -> dict:
                 + ": " + "; ".join(" + ".join(c["fragments"]) for c in hint[:6])))
         elif matches:
             report["cleaved_bond"] = matches[0]
+            sites = site_words_in(question)
+            got = matches[0].get("site", "")
+            if sites and not fails and not any(w in got for w in sites):
+                right = [c for c in candidates if any(w in c.get("site", "") for w in sites)
+                         and (not wanted or c["bond"] in wanted)]
+                fails.append(_item(
+                    "site", f"these fragments break the {got or 'unlabelled'} {matches[0]['bond']} bond, "
+                    f"but the question asks for the {'/'.join(sites)} one",
+                    ("the " + "/".join(sites) + " split is: " + "; ".join(" + ".join(c["fragments"]) for c in right))
+                    if right else f"the parent has no {'/'.join(sites)} {'/'.join(wanted)} bond"))
             if wanted and matches[0]["bond"] not in wanted:
                 options = [" + ".join(c["fragments"]) for c in candidates if c["bond"] in wanted]
                 fails.append(_item(
@@ -195,7 +257,7 @@ def critique_plan(spec: dict, question: str | None = None) -> dict:
                     f"the question asks about {' or '.join(wanted)}"
                     + (f"; its symmetry-unique homolyses: {'; '.join(options[:6])}" if options else "")))
             same_type = [c for c in candidates if c["bond"] == matches[0]["bond"]]
-            if len(same_type) > 1 and not spec.get("bond_cleaved"):
+            if len(same_type) > 1 and not spec.get("bond_cleaved") and not sites:
                 warns.append(_item(
                     "bond_choice", f"the parent has {len(same_type)} symmetry-distinct "
                     f"{matches[0]['bond']} bonds",

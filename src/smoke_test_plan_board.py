@@ -95,11 +95,15 @@ async def main():
     notes = [n for e in r["board"]["entries"] if e["module"] == "fragments" for rv in e["reviews"] for n in rv["notes"]]
     assert any("[CH2]c1ccccc1 + [H]" in n for n in notes), notes  # Validator shows the benzylic split
 
-    # B: Validator passes a ring C-H; the critic sends it back; benzylic accepted.
+    # B: a ring C-H for a benzylic question -> the Validator's site check
+    # rejects it (before the critic) and names the benzylic split.
     r = await run({**base, "fragments": [frags("Cc1ccc[c]c1"), frags("[CH2]c1ccccc1")]})
     show("B", r)
     fr = [x for x in r["rounds"] if x["module"] == "fragments"]
-    assert [(x["validator"], x["critic"]) for x in fr] == [("PASS", "REVISE"), ("PASS", "ACCEPT")]
+    assert [(x["validator"], x["critic"]) for x in fr] == [("FAIL", None), ("PASS", "ACCEPT")]
+    first = [e for e in r["board"]["entries"] if e["module"] == "fragments"][0]["reviews"][0]["notes"]
+    assert any("benzylic split is: [CH2]c1ccccc1 + [H]" in n for n in first), first
+    assert any("(benzylic C-H)" in n for n in first), first
     assert r["spec"]["fragments"][0]["smiles"] == "[CH2]c1ccccc1"
 
     # C: the final review reopens the method module once.

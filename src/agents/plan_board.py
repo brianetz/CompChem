@@ -64,7 +64,9 @@ DEFAULT_SKILL = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__f
 
 _SPECIES = {
     "type": "object",
-    "properties": {"label": {"type": "string"}, "smiles": {"type": "string"},
+    "properties": {"label": {"type": "string"},
+                   "smiles": {"type": "string", "description": "A SMILES string, e.g. 'CO' (methanol) or "
+                              "'C[CH2]' (ethyl radical) - never a name or a formula such as 'CH3OH'"},
                    "charge": {"type": "integer"}, "multiplicity": {"type": "integer"}},
     "required": ["smiles", "charge", "multiplicity"],
 }
@@ -162,6 +164,54 @@ def _species_problems(sp: Any, name: str) -> list[str]:
     return []
 
 
+def _split_label(c: dict) -> str:
+    """'[CH2]c1ccccc1 + [H] (benzylic C-H)' - a split with its site."""
+    return " + ".join(c["fragments"]) + f" ({(c.get('site') + ' ') if c.get('site') else ''}{c['bond']})"
+
+
+# A well-formed example of each module, for molecules other than the one
+# asked about, so the Planner copies the format, not the chemistry
+# (2026-10-21: 7 of 39 rejected module versions in B1/B2 were format
+# errors and 20 were rationales the critic sent back).
+_MODULE_EXAMPLES = {
+    "target": {"analysis_type": "bde", "parent": {"label": "water", "smiles": "O", "charge": 0, "multiplicity": 1},
+               "bond": "O-H"},
+    "fragments": {"fragments": [{"label": "ethyl radical", "smiles": "C[CH2]", "charge": 0, "multiplicity": 2},
+                                {"label": "hydrogen atom", "smiles": "[H]", "charge": 0, "multiplicity": 2}]},
+    "method": {"xc": "b3lyp", "basis": "6-31g*"},
+}
+_FALLBACK_RATIONALE = (
+    "Breaking one O-H bond of water (H-O-H) leaves the other O-H bond intact, giving hydroxyl radical ([OH], "
+    "neutral doublet: 9 total electrons (7 valence), odd, consistent with multiplicity 2) plus a hydrogen atom "
+    "([H], neutral doublet: 1 electron, odd, consistent with multiplicity 2), not full atomization into O + 2H. "
+    "Parent water is a closed-shell singlet (charge 0, multiplicity 1). Workflow: GFN2-xTB geometry optimization "
+    "of parent and both fragments as a cheap prescreen, then a B3LYP/def2-TZVP DFT single point at those "
+    "geometries (unrestricted for the radicals). BDE = E(OH) + E(H) - E(H2O), converted to kcal/mol. This is an "
+    "electronic-energy BDE without ZPE or thermal corrections.")
+
+
+def _reference_rationale() -> str:
+    """The skill's own 'Good (water O-H)' rationale, the critic's yardstick."""
+    import re
+
+    m = re.search(r"Good \(water O-H\):\s*>\s*(.+?)\n\s*\n", _skill_text(), re.S)
+    return m.group(1).strip() if m else _FALLBACK_RATIONALE
+
+
+def module_example(module: str) -> str:
+    """The format guidance shown to the Planner for one module."""
+    if module == "rationale":
+        return ("Reference rationale, for water: \"" + _reference_rationale() + "\"\nWrite yours with the same "
+                "structure and the same items - the bond broken and what stays intact, each species' charge, total "
+                "electron count and multiplicity with the parity argument, the parent's spin state, single-bond "
+                "homolysis versus full atomization, each workflow stage and why, the functional and basis of THIS "
+                "plan's accepted method module, the BDE formula and units, and that it is an electronic BDE "
+                "without ZPE - but for this question's molecule, bond and fragments.")
+    note = " Prefer the method the retrieved results above recommend, if any." if module == "method" else ""
+    return ("Example of a well-formed '" + module + "' module, for a DIFFERENT molecule - copy its format "
+            "(field names, JSON objects, SMILES), not its chemistry: " + json.dumps(_MODULE_EXAMPLES[module]) + note)
+
+
 def validate_module(module: str, content: dict, accepted: dict, question: str) -> dict:
     """Deterministic review of one module, given the accepted ones.
     Returns {'verdict', 'problems', 'notes', 'signature'}."""
@@ -184,7 +234,7 @@ def validate_module(module: str, content: dict, accepted: dict, question: str) -
                 problems.append(f"the parent {parent['smiles']!r} has no single {'/'.join(declared)} bond that can be broken")
             elif cands:
                 notes.append(f"symmetry-unique {'/'.join(declared) or 'single'} bonds of {parent['smiles']}: "
-                             + "; ".join(" + ".join(c["fragments"]) for c in cands[:6]))
+                             + "; ".join(_split_label(c) for c in cands[:6]))
     elif module == "fragments":
         tgt = accepted.get("target") or {}
         spec = {"analysis_type": tgt.get("analysis_type", "bde"), "parent": _fix_species(tgt.get("parent")),
@@ -197,9 +247,9 @@ def validate_module(module: str, content: dict, accepted: dict, question: str) -
             problems = problems_as_text(report["fails"])
             if report.get("cleaved_bond"):
                 notes.append("these fragments break " + report["cleaved_bond"]["bond"] + ": "
-                             + " + ".join(report["cleaved_bond"]["fragments"]))
+                             + _split_label(report["cleaved_bond"]))
             wanted = bond_types_in(q)
-            opts = [" + ".join(c["fragments"]) for c in report.get("candidates", []) if not wanted or c["bond"] in wanted]
+            opts = [_split_label(c) for c in report.get("candidates", []) if not wanted or c["bond"] in wanted]
             if opts:
                 notes.append(f"the parent's symmetry-unique {'/'.join(wanted) or 'single'}-bond splits: " + "; ".join(opts[:6]))
     elif module == "method":
@@ -304,7 +354,8 @@ class BoardPlannerAgent(Agent):
     @action
     async def publish(self, module: str) -> int:
         snap = await self.board.snapshot()
-        message = render_board(snap, module) + f"\n\nPublish the '{module}' module now."
+        message = (render_board(snap, module) + "\n\n" + module_example(module)
+                   + f"\n\nPublish the '{module}' module now.")
         raw = await self.agent_run_sync(self._call, module, message)
         content = {k: _decode(v) for k, v in raw.items()} if isinstance(raw, dict) else {"error": repr(raw)}
         return await self.board.post(module, content, "Planner")

@@ -38,8 +38,9 @@ def main():
         ("methanol CO doublet", spec("CO", [rad("CO"), H]), MQ, "FAIL", "parity"),
         ("methanol C-H break", spec("CO", [rad("[CH2]O"), H]), MQ, "FAIL", "requested_bond"),
         ("methanol OH + H", spec("CO", [rad("[OH]"), H]), MQ, "FAIL", "atom_balance"),
-        ("toluene benzylic", spec("Cc1ccccc1", [rad("[CH2]c1ccccc1"), H]), TQ, "WARN", None),
-        ("toluene ring C-H", spec("Cc1ccccc1", [rad("Cc1ccc[c]c1"), H]), TQ, "WARN", None),
+        ("toluene benzylic", spec("Cc1ccccc1", [rad("[CH2]c1ccccc1"), H]), TQ, "PASS", None),
+        ("toluene ring C-H", spec("Cc1ccccc1", [rad("Cc1ccc[c]c1"), H]), TQ, "FAIL", "site"),
+        ("toluene, no site word", spec("Cc1ccccc1", [rad("Cc1ccc[c]c1"), H]), "C-H BDE of toluene?", "WARN", None),
         ("singlet O atom", spec("O", [rad("[O]", mult=1), rad("[H][H]", mult=1)]), None, "FAIL", "atom_ground_state"),
         ("charge mismatch", spec("CO", [rad("C[O-]", mult=1), rad("[H+]", mult=1, charge=1)]), MQ, "FAIL", "formal_charge"),
     ]
