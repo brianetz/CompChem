@@ -1,0 +1,9 @@
+# Second new-molecule batch (2026-10-28): bonds not computed before. nemotron, plan board v2, retrieval off.
+What's the C-H bond dissociation energy of methane (CH4) in kcal/mol, using a cheap xtb prescreen and a DFT refinement?
+What's the N-H bond dissociation energy of methylamine (CH3NH2) in kcal/mol, using a cheap xtb prescreen and a DFT refinement?
+What's the O-H bond dissociation energy of formic acid (HCOOH) in kcal/mol, using a cheap xtb prescreen and a DFT refinement?
+What's the C-Br bond dissociation energy of bromomethane (CH3Br) in kcal/mol, using a cheap xtb prescreen and a DFT refinement?
+What's the C-C bond dissociation energy of propane (C3H8) in kcal/mol, using a cheap xtb prescreen and a DFT refinement?
+What's the S-S bond dissociation energy of dimethyl disulfide (CH3SSCH3) in kcal/mol, using a cheap xtb prescreen and a DFT refinement?
+What's the aldehyde C-H bond dissociation energy of acetaldehyde (CH3CHO) in kcal/mol, using a cheap xtb prescreen and a DFT refinement?
+What's the H-Cl bond dissociation energy of hydrogen chloride (HCl) in kcal/mol, using a cheap xtb prescreen and a DFT refinement?

@@ -1,0 +1,9 @@
+# New elements and bond types (2026-10-21): N, S, Cl, F, O-O, C-C; phenol O-H and propene allylic C-H relate to stored O-H / C-H results.
+What's the N-H bond dissociation energy of ammonia (NH3) in kcal/mol, using a cheap xtb prescreen and a DFT refinement?
+What's the S-H bond dissociation energy of methanethiol (CH3SH) in kcal/mol, using a cheap xtb prescreen and a DFT refinement?
+What's the C-Cl bond dissociation energy of chloromethane (CH3Cl) in kcal/mol, using a cheap xtb prescreen and a DFT refinement?
+What's the O-O bond dissociation energy of hydrogen peroxide (H2O2) in kcal/mol, using a cheap xtb prescreen and a DFT refinement?
+What's the C-C bond dissociation energy of ethane (C2H6) in kcal/mol, using a cheap xtb prescreen and a DFT refinement?
+What's the O-H bond dissociation energy of phenol (C6H5OH) in kcal/mol, using a cheap xtb prescreen and a DFT refinement?
+What's the allylic C-H bond dissociation energy of propene (CH2=CH-CH3) in kcal/mol, using a cheap xtb prescreen and a DFT refinement?
+What's the H-F bond dissociation energy of hydrogen fluoride (HF) in kcal/mol, using a cheap xtb prescreen and a DFT refinement?
