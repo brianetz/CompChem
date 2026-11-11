@@ -94,6 +94,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--ollama-no-mmap", action="store_true",
                    help="Planners ask Ollama to load the model without mmap: a sequential "
                         "read (~2 GB/s from Lustre) instead of page faults (~60 MB/s)")
+    p.add_argument("--ollama-servers", type=int, default=1,
+                   help="Ollama servers on the block's first node, each on its own port and an "
+                        "equal share of the 8 GCDs; campaign i uses server (i-1) %% N. For models "
+                        "Ollama serves one request at a time (nemotron_h_moe), this is the only "
+                        "way to answer several planners at once. Must divide 8")
     p.add_argument("--plan-critic-skill", default=None,
                    help="Path to a plan-critic skill .md (e.g. <repo-src>/bde-plan-critic.md): "
                         "the planner's model reviews each validated BDE plan with it and a FAIL "
@@ -150,7 +155,6 @@ def ollama_worker_init(args: argparse.Namespace, run_dir: Path) -> list[str]:
     ollama = shlex.quote(args.ollama_bin)
     model = shlex.quote(args.ollama_model)
     port = args.ollama_port
-    local = f"OLLAMA_HOST=127.0.0.1:{port}"
     lines = []
     if args.ollama_models_dir:
         lines.append(f"export OLLAMA_MODELS={shlex.quote(args.ollama_models_dir)}")
@@ -159,16 +163,36 @@ def ollama_worker_init(args: argparse.Namespace, run_dir: Path) -> list[str]:
         server_env += f" OLLAMA_CONTEXT_LENGTH={args.ollama_context_length}"
     if args.ollama_load_timeout:
         server_env += f" OLLAMA_LOAD_TIMEOUT={shlex.quote(args.ollama_load_timeout)}"
-    lines += [
+    n = args.ollama_servers
+    if n < 1 or 8 % n:
+        raise SystemExit("--ollama-servers must divide the 8 GCDs (1, 2, 4 or 8)")
+    if n == 1:
         # Append: when Parsl replaces a timed-out block, the new server must
         # not overwrite the first block's log.
-        f"{server_env} "
-        f"{ollama} serve >> {shlex.quote(str(run_dir / 'ollama_serve.log'))} 2>&1 &",
-        f"for _ in $(seq 1 120); do {local} {ollama} list >/dev/null 2>&1 && break; sleep 1; done",
-        f"{local} {ollama} show {model} >/dev/null 2>&1 || "
-        f"{{ echo \"Ollama server/model {args.ollama_model} not available on $(hostname)\" >&2; exit 1; }}",
-        # Workers (on this node or others in the block) inherit this.
-        f"export OLLAMA_HOST=$(hostname):{port}",
+        lines.append(f"{server_env} "
+                     f"{ollama} serve >> {shlex.quote(str(run_dir / 'ollama_serve.log'))} 2>&1 &")
+    else:
+        per = 8 // n
+        for s in range(n):
+            gcds = ",".join(str(g) for g in range(s * per, (s + 1) * per))
+            env = server_env.replace(f"0.0.0.0:{port}", f"0.0.0.0:{port + s}")
+            log = shlex.quote(str(run_dir / f"ollama_serve_{s}.log"))
+            # Slurm already sets ROCR_VISIBLE_DEVICES=0-7; restricting with
+            # HIP_VISIBLE_DEVICES on top of it hides every GPU from servers
+            # 1..N-1 (they fall back to CPU), so replace ROCR's list instead.
+            lines.append(f"env -u HIP_VISIBLE_DEVICES ROCR_VISIBLE_DEVICES={gcds} {env} "
+                         f"{ollama} serve >> {log} 2>&1 &")
+    for s in range(n):
+        lh = f"OLLAMA_HOST=127.0.0.1:{port + s}"
+        lines += [
+            f"for _ in $(seq 1 120); do {lh} {ollama} list >/dev/null 2>&1 && break; sleep 1; done",
+            f"{lh} {ollama} show {model} >/dev/null 2>&1 || "
+            f"{{ echo \"Ollama server {s}/model {args.ollama_model} not available on $(hostname)\" >&2; exit 1; }}",
+        ]
+    lines += [
+        # Workers (on this node or others in the block) inherit this; with
+        # several servers each campaign command picks its own port from it.
+        f"export OLLAMA_HOST=$(hostname):{port} OLLAMA_NODE=$(hostname)",
         *([f"export OLLAMA_CHAT_OPTIONS={shlex.quote(json.dumps({'use_mmap': False}))}"]
           if args.ollama_no_mmap else []),
         'echo "Shared Ollama server ready at $OLLAMA_HOST"',
@@ -195,8 +219,14 @@ def main() -> None:
     from parsl import bash_app
     from parsl_config import get_frontier_config
 
-    run_dir = Path(args.root_dir) / f"run_{datetime.now():%Y%m%d_%H%M%S}"
-    run_dir.mkdir(parents=True)
+    stamp = f"run_{datetime.now():%Y%m%d_%H%M%S}"
+    run_dir = Path(args.root_dir) / stamp
+    for k in range(2, 100):  # two drivers started in the same second
+        try:
+            run_dir.mkdir(parents=True)
+            break
+        except FileExistsError:
+            run_dir = Path(args.root_dir) / f"{stamp}_{k}"
     print(f"Run directory: {run_dir}")
 
     threads = max(1, USABLE_CORES // args.workers_per_node)
@@ -269,6 +299,9 @@ def main() -> None:
                                  "--plan-board-deadline-min", str(args.plan_board_deadline_min)]
                                 if args.plan_board else []),
                               "--auto-approve", *extra])
+            if args.backend == "ollama" and args.ollama_servers > 1:
+                server_port = args.ollama_port + (i - 1) % args.ollama_servers
+                cmd = f"export OLLAMA_HOST=$OLLAMA_NODE:{server_port} && {cmd}"
             return run_cmd(shlex.quote(str(task_dir)), cmd, stdout=log, stderr=log)
 
         tasks = range(1, args.total_tasks + 1)
