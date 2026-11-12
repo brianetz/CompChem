@@ -27,6 +27,7 @@ Usage:
         [--model claude-opus-5]                                # optional: override ANTHROPIC_MODEL for this run
         [--auto-approve]                                       # skip both human-approval gates (Phase 10) - scripted/test runs
         [--max-replan-rounds 2]                                # cap on 'reprioritize' round-trips through the planner (default: 2)
+        [--critique-plan]                                      # opt-in: validate a BDE plan before the approval gate (analysis/bde_plan_validator.py)
 
 Without --auto-approve, this campaign now PAUSES TWICE for a terminal
 prompt: once after planning, once after the critic's review. Existing
@@ -87,6 +88,15 @@ def parse_args() -> argparse.Namespace:
         "can send the spec back through the planner before the campaign "
         "just finalizes with whatever it currently has (default: 2).",
     )
+    parser.add_argument(
+        "--critique-plan",
+        action="store_true",
+        help="Opt-in: run the deterministic BDE plan validator "
+        "(analysis/bde_plan_validator.py) on each plan before the approval "
+        "gate, with one bounded corrective replan on FAIL. With "
+        "--auto-approve, a plan that still FAILs is aborted instead of run. "
+        "Also adds BDE-value and geometry-connectivity checks to the critic's verdict.",
+    )
     return parser.parse_args()
 
 
@@ -135,6 +145,17 @@ async def run_campaign(args: argparse.Namespace) -> str:
         # attempts" philosophy as the LLM self-correction retry in
         # llm/planner_llm.py).
         for round_num in range(args.max_replan_rounds + 1):
+            if args.critique_plan:  # opt-in; default path is unchanged
+                from agents.human_gate import ApprovalDecision
+                from agents.plan_critic import critique_spec
+
+                spec, plan_report = await critique_spec(spec, planner, model=args.model)
+                if plan_report is not None and plan_report.verdict == "FAIL" and args.auto_approve:
+                    return _abort_report(
+                        spec,
+                        ApprovalDecision(action="abort", feedback=plan_report.feedback()),
+                        stage="plan",
+                    )
             plan_decision = await request_plan_approval(spec, auto_approve=args.auto_approve)
             if plan_decision.action == "abort":
                 return _abort_report(spec, plan_decision, stage="plan")
@@ -148,6 +169,10 @@ async def run_campaign(args: argparse.Namespace) -> str:
 
             verdict = await critic.review_analysis(results)
             print("Critic verdict:", verdict)
+            if args.critique_plan:  # opt-in: extra post-run BDE sanity checks
+                from agents.plan_critic import augment_verdict
+
+                verdict = augment_verdict(results, verdict)
 
             analysis_decision = await request_analysis_approval(
                 spec, results, verdict, auto_approve=args.auto_approve
