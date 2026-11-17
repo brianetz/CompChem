@@ -116,6 +116,26 @@ At each gate, respond at the prompt:
   python verify_agent_provenance.py
   ```
 
+### Running on Frontier
+
+Batches of BDE campaigns run on OLCF Frontier in one Slurm job: Ollama serves
+the planner and critic models on the node's GPUs, Parsl runs 8 campaigns per
+node on the CPUs, a shared SQLite results database on Lustre reuses species
+already computed, and Flowcept records the provenance of every step.
+
+```bash
+cd frontier-native
+/path/to/venv/bin/python submit_campaigns_parsl.py --questions-file questions.txt \
+  --staged --db /lustre/.../results.sqlite --plan-board --plan-board-deadline-min 45 \
+  --plan-critic-skill ../src/bde-plan-critic.md \
+  --backend ollama --ollama-model nemotron-3-super:120b --ollama-servers 4 ...
+```
+
+See [`frontier-native/README.md`](frontier-native/README.md) for setup, the
+full command, model and serving choices, where outputs and provenance are
+written, and known problems; [`frontier-native/experiments/`](frontier-native/experiments/README.md)
+holds the launchers and analysis scripts behind the comparisons.
+
 ### Adding a new analysis type
 
 Add a module under `src/skills/` exposing `NAME`, `DESCRIPTION`, `run(spec)`, `review(results)`, and `describe(spec, results, verdict)`, then register it in `skills/__init__.py`. `PlannerAgent`'s LLM tool schema and `ExecutorAgent`/`CriticAgent`/`ReporterAgent` all pick it up automatically — no changes needed to those classes.
@@ -124,6 +144,7 @@ Add a module under `src/skills/` exposing `NAME`, `DESCRIPTION`, `run(spec)`, `r
 
 - The local path (RDKit → xtb → PySCF, rule-based or LLM-planned, both `single_point` and `bde` analyses, both human approval gates) is complete and working end-to-end.
 - NWChem is wired in as an alternate ASE-calculator refinement engine (`engines/nwchem_engine.py`) but is not yet selectable by either planner, and isn't yet validated against a real binary run through the agent pipeline.
+- OLCF Frontier: batches of LLM-planned BDE campaigns run end-to-end with the Parsl driver in `frontier-native/` (staged plan → compute → assemble, shared results database, plan board with code checks and an LLM plan critic, Flowcept provenance). Since plan board v2, 189 of 192 test campaigns were correct with Llama 3.1 405B, nemotron-3-nano and nemotron-3-super; the three misses ran out of planning time.
 - HPC deployment (OLCF Defiant) is in progress: NWChem 7.2.3 has been built successfully via Spack on Defiant; a Slurm functional test of that binary is in progress. A Globus Compute endpoint for dispatching work from a laptop to Defiant has been stood up and confirmed running, paused pending that validation.
 
 ## Repo layout
