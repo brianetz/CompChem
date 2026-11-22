@@ -152,6 +152,13 @@ def parse_args() -> argparse.Namespace:
         "--plan-only). Stage 3 of the staged driver.",
     )
     parser.add_argument(
+        "--plan-hint",
+        default=None,
+        help="Feedback from an independent check of an earlier plan for this question "
+        "(learn/oracle.py), shown to the plan board with the question. Says what was "
+        "wrong, never the answer.",
+    )
+    parser.add_argument(
         "--no-rag",
         action="store_true",
         help="Don't add prior results retrieved from $COMPCHEM_DB to the "
@@ -215,6 +222,8 @@ async def _plan_on_board(manager, args: argparse.Namespace, backend: str) -> dic
         "backend": backend, "model": args.model, "max_attempts": args.plan_board_attempts,
         "deadline_s": args.plan_board_deadline_min * 60})
     context, retrieval = build_retrieval_context(args.question)
+    if args.plan_hint:
+        context = (context + "\n\n" if context else "") + "Feedback on an earlier plan for this question: " + args.plan_hint
     result = await moderator.plan(args.question, context)
     print("Plan board:", result["outcome"], "after", len(result["rounds"]), "reviewed round(s);",
           "supervisor:", result["supervisor"] or "no action")

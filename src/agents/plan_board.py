@@ -54,10 +54,36 @@ from llm import planner_llm as P
 from llm.plan_checks import _decode, _fix_species
 from llm.plan_critic_llm import _as_list
 from skills import list_skills
-from storage.agent_provenance import agent_llm_invocation_task
+from storage.agent_provenance import agent_llm_invocation_task, agent_tool_task
 from storage.rag import bond_types_in
 
 logger = logging.getLogger(__name__)
+
+
+def _tracing() -> bool:
+    """COMPCHEM_TRACE=1 adds each LLM call's full prompt (and, for the
+    Planner, the board state it saw) to its Flowcept record, so mistakes and
+    their corrections can later be exported as training and lesson data."""
+    return os.environ.get("COMPCHEM_TRACE", "") not in ("", "0", "false")
+
+
+def _lessons_block(module: str, question: str) -> str:
+    """COMPCHEM_LESSONS=<lessons.jsonl>[:k] adds the k most relevant lessons
+    from past mistakes for this module to the Planner's message."""
+    spec = os.environ.get("COMPCHEM_LESSONS", "")
+    if not spec:
+        return ""
+    path, _, k = spec.partition(":")
+    try:
+        from learn.memory import LessonMemory
+        hits = LessonMemory.load(path).retrieve(module, question, k=int(k or 3))
+    except Exception as exc:  # never let the memory break planning
+        logger.warning("lesson retrieval failed: %s", exc)
+        return ""
+    if not hits:
+        return ""
+    return ("\n\nLessons from past mistakes on this module (general advice, not the answer):\n"
+            + "\n".join(f"- {h['lesson']}" for h in hits))
 
 MODULES = ("target", "fragments", "method", "rationale")
 DEFAULT_SKILL = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bde-plan-critic.md")
@@ -354,22 +380,30 @@ class BoardPlannerAgent(Agent):
     @action
     async def publish(self, module: str) -> int:
         snap = await self.board.snapshot()
-        message = (render_board(snap, module) + "\n\n" + module_example(module)
+        lessons = _lessons_block(module, snap.get("question", ""))
+        message = (render_board(snap, module) + "\n\n" + module_example(module) + lessons
                    + f"\n\nPublish the '{module}' module now.")
-        raw = await self.agent_run_sync(self._call, module, message)
+        trace = None
+        if _tracing():
+            trace = {"system_prompt": self.prompt, "user_message": message, "board": snap,
+                     "attempt": 1 + sum(1 for e in snap.get("entries", []) if e.get("module") == module),
+                     "lessons": lessons}
+        raw = await self.agent_run_sync(self._call, module, message, trace)
         content = {k: _decode(v) for k, v in raw.items()} if isinstance(raw, dict) else {"error": repr(raw)}
         return await self.board.post(module, content, "Planner")
 
-    def _call(self, module: str, message: str) -> Any:
+    def _call(self, module: str, message: str, trace: dict | None = None) -> Any:
         attempt_fn, _ = P._BACKENDS[self.backend]
-        with agent_llm_invocation_task("PlannerAgent", f"publish_{module}",
-                                       used={"model": self.model, "backend": self.backend, "module": module}) as t:
+        used = {"model": self.model, "backend": self.backend, "module": module, **(trace or {})}
+        with agent_llm_invocation_task("PlannerAgent", f"publish_{module}", used=used) as t:
+            thinking = None
             try:
-                raw, _, _ = attempt_fn(self.model, self.prompt, [module_tool(module)],
-                                       [{"role": "user", "content": message}])
+                raw, msg, _ = attempt_fn(self.model, self.prompt, [module_tool(module)],
+                                         [{"role": "user", "content": message}])
+                thinking = getattr(msg, "thinking", None)
             except Exception as exc:
-                raw = {"error": f"{type(exc).__name__}: {exc}"[:600]}
-            t.end(generated={"tool_input": raw})
+                raw = {"error": f"{type(exc).__name__}: {exc}"[:8000 if trace else 600]}
+            t.end(generated={"tool_input": raw, **({"thinking": thinking} if trace else {})})
         return raw
 
 
@@ -423,10 +457,13 @@ class BoardCriticAgent(Agent):
 
     def _call(self, module: str | None, message: str, tool: dict) -> dict:
         attempt_fn, _ = P._BACKENDS[self.backend]
-        with agent_llm_invocation_task("PlanCriticAgent", f"review_{module or 'plan'}",
-                                       used={"model": self.model, "backend": self.backend, "module": module}) as t:
+        system = _skill_text() + _critic_instructions(module)
+        used = {"model": self.model, "backend": self.backend, "module": module}
+        if _tracing():
+            used.update(system_prompt=system, user_message=message)
+        with agent_llm_invocation_task("PlanCriticAgent", f"review_{module or 'plan'}", used=used) as t:
             try:
-                raw, _, _ = attempt_fn(self.model, _skill_text() + _critic_instructions(module), [tool],
+                raw, _, _ = attempt_fn(self.model, system, [tool],
                                        [{"role": "user", "content": message}])
             except Exception as exc:
                 raw = {"verdict": "ERROR", "error": f"{type(exc).__name__}: {exc}"[:300]}
@@ -480,6 +517,7 @@ class PlanBoardModerator(Agent):
                 crit = await self.critic.evaluate(entry_id)
             self.rounds.append({"round": len(self.rounds) + 1, "module": module, "attempt": attempt,
                                 "validator": val["verdict"], "critic": crit, "signature": val["signature"]})
+            await self._record_round(entry_id, val, crit)
             if val["verdict"] == "PASS" and crit in ("ACCEPT", "ERROR"):
                 await self.board.accept(module, entry_id)
                 return True
@@ -499,10 +537,33 @@ class PlanBoardModerator(Agent):
             return True
         return False
 
+    async def _record_round(self, entry_id: int, val: dict, crit: str | None) -> None:
+        """One Flowcept record per board round: what the code checks and the
+        critic said about this attempt (the verdicts the Planner was judged by)."""
+        snap = await self.board.snapshot()
+        entry = snap["entries"][entry_id]
+        critic_notes = [n for r in entry.get("reviews", []) if r.get("author") == "PlanCritic" for n in r.get("notes", [])]
+        r = self.rounds[-1]
+        with agent_tool_task("PlanBoardModerator", "round_result",
+                             used={"round": r["round"], "module": r["module"], "attempt": r["attempt"],
+                                   "entry_id": entry_id, "question": snap.get("question", "")}) as t:
+            t.end(generated={"validator": val["verdict"], "problems": val.get("problems", []),
+                             "notes": val.get("notes", []), "signature": val.get("signature"),
+                             "critic": crit, "critic_notes": critic_notes, "content": entry.get("content")})
+
     @action
     async def plan(self, question: str, context: str = "") -> dict:
         """Build the plan for one question. Returns {'spec' (None on failure),
         'outcome', 'rounds', 'supervisor', 'final_reviews', 'board'}."""
+        result = await self._plan(question, context)
+        with agent_tool_task("PlanBoardModerator", "plan_outcome",
+                             used={"question": question, "context": context}) as t:
+            t.end(generated={"outcome": result["outcome"], "rounds": len(result["rounds"]),
+                             "timed_out": self.timed_out, "spec": result["spec"],
+                             "elapsed_s": round(time.monotonic() - self.started, 1)})
+        return result
+
+    async def _plan(self, question: str, context: str = "") -> dict:
         await self.board.reset(question, context)
         self.started, self.timed_out = time.monotonic(), False
         todo, final_reviews, outcome, spec = list(MODULES), [], "failed", None
@@ -595,12 +656,14 @@ class PlanBoardModerator(Agent):
         module = self.rounds[-1]["module"]
         board = render_board(snap, module)
         attempt_fn, _ = P._BACKENDS[self.backend]
-        with agent_llm_invocation_task("PlanBoardModerator", "supervisor_edit",
-                                       used={"model": self.model, "backend": self.backend, "module": module}) as t:
+        user = "Validator reviews are on the board.\n\n" + board[-12000:]
+        used = {"model": self.model, "backend": self.backend, "module": module}
+        if _tracing():
+            used.update(system_prompt=_EDIT_PROMPT + _EDIT_FIELD_NAMES, user_message=user)
+        with agent_llm_invocation_task("PlanBoardModerator", "supervisor_edit", used=used) as t:
             try:
                 raw, _, _ = attempt_fn(self.model, _EDIT_PROMPT + _EDIT_FIELD_NAMES, [_INSTRUCTION_TOOL],
-                                       [{"role": "user", "content": "Validator reviews are on the board.\n\n"
-                                                                    + board[-12000:]}])
+                                       [{"role": "user", "content": user}])
                 instruction = str(raw.get("instruction") or "").strip()
                 diagnosis = str(raw.get("diagnosis") or "").strip()
             except Exception as exc:

@@ -49,7 +49,8 @@ _SITE_WORDS = {
     "aromatic": "aromatic", "aryl": "aromatic", "phenyl": "aromatic", "ring": "aromatic",
     "ortho": "ortho", "meta": "meta", "para": "para",
     "primary": "primary", "secondary": "secondary", "tertiary": "tertiary",
-    "methyl": "methyl", "hydroxyl": "hydroxyl", "phenolic": "hydroxyl",
+    "methyl": "methyl", "methylene": "methylene", "methine": "methine",
+    "hydroxyl": "hydroxyl", "phenolic": "hydroxyl",
 }
 
 
@@ -57,7 +58,12 @@ def site_words_in(question: str) -> list[str]:
     """Site labels the question asks for, e.g. ['benzylic']."""
     import re
 
-    words = re.findall(r"[a-z]+", (question or "").lower())
+    text = (question or "").lower()
+    # Only the words describing the bond count: "the O-H bond dissociation energy of methyl
+    # hydroperoxide" asks for no 'methyl' site (the word belongs to the molecule's name).
+    if "bond dissociation" in text:
+        text = text.split("bond dissociation", 1)[0]
+    words = re.findall(r"[a-z]+", text)
     return sorted({_SITE_WORDS[w] for w in words if w in _SITE_WORDS})
 
 
@@ -86,10 +92,15 @@ def _site_of(parent, idx: int) -> str:
         return "benzylic"
     if atom.GetHybridization().name == "SP2":
         return "vinylic"
+    # allylic = next to a C=C; a CH3 next to C=O (acetaldehyde) is not allylic
     if any(b.GetBondTypeAsDouble() == 2.0 and b.GetOtherAtom(n).GetIdx() != idx
+           and n.GetSymbol() == "C" and b.GetOtherAtom(n).GetSymbol() == "C"
            for n in heavy for b in n.GetBonds()):
         return "allylic"
-    return {0: "methyl", 1: "primary", 2: "secondary", 3: "tertiary"}.get(len(heavy), "quaternary")
+    # Both naming schemes, so a question may say 'primary' or 'methyl' (CH3 on one heavy
+    # atom), 'secondary' or 'methylene', 'tertiary' or 'methine'. Before 2026-11-22 a CH3
+    # in a larger molecule was only 'primary', so 'methyl C-H' questions could never pass.
+    return {0: "methyl", 1: "primary, methyl", 2: "secondary, methylene", 3: "tertiary, methine"}.get(len(heavy), "quaternary")
 
 
 def enumerate_bde_candidates(parent_smiles: str) -> list[dict]:
@@ -242,7 +253,9 @@ def critique_plan(spec: dict, question: str | None = None) -> dict:
             report["cleaved_bond"] = matches[0]
             sites = site_words_in(question)
             got = matches[0].get("site", "")
-            if sites and not fails and not any(w in got for w in sites):
+            # Site words describe where an X-H bond breaks; a heavy-atom bond has no site label
+            # (before 2026-11-22 such questions failed whenever they used a site word).
+            if sites and got and not fails and not any(w in got for w in sites):
                 right = [c for c in candidates if any(w in c.get("site", "") for w in sites)
                          and (not wanted or c["bond"] in wanted)]
                 fails.append(_item(

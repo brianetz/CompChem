@@ -125,12 +125,34 @@ def parse_args() -> argparse.Namespace:
                    help="Plan all -> compute unique missing species -> assemble (needs --db)")
     p.add_argument("--no-rag", action="store_true",
                    help="Don't give the planner prior results retrieved from --db")
+    p.add_argument("--tasks", default=None,
+                   help="Task file from learn/task_gen.py: questions with computed answers. Plans are "
+                        "graded by learn/oracle.py (written to oracle.json in the run directory)")
+    p.add_argument("--split", default="train", help="With --tasks: which split to run (train | eval | all)")
+    p.add_argument("--task-offset", type=int, default=0, help="With --tasks: skip this many tasks of the split")
+    p.add_argument("--task-limit", type=int, default=None, help="With --tasks: run at most this many tasks")
+    p.add_argument("--oracle-retry", action="store_true",
+                   help="With --tasks: plan once more, with the oracle's hint, every task whose plan was wrong")
+    p.add_argument("--plan-stage-only", action="store_true",
+                   help="Stop after planning (and grading): no compute or assemble stage")
+    p.add_argument("--trace", action="store_true",
+                   help="Record each LLM call's full prompt in its Flowcept record (COMPCHEM_TRACE=1)")
+    p.add_argument("--lessons", default=None,
+                   help="lessons.jsonl[:k]: add the k most relevant lessons from past mistakes to the "
+                        "Planner's prompt (COMPCHEM_LESSONS)")
     p.add_argument("--interface", default="hsn0",
                    help="Network interface compute nodes use to reach this host (default: hsn0)")
     args = p.parse_args()
     if args.staged and not args.db:
         p.error("--staged needs --db")
     questions = list(args.question)
+    args.task_records = []
+    if args.tasks:
+        recs = json.loads(Path(args.tasks).read_text())["tasks"]
+        recs = [t for t in recs if args.split == "all" or t["split"] == args.split]
+        recs = recs[args.task_offset:][: args.task_limit] if args.task_limit else recs[args.task_offset:]
+        args.task_records = recs
+        questions += [t["question"] for t in recs]
     if args.questions_file:
         for line in Path(args.questions_file).read_text().splitlines():
             if line.strip() and not line.lstrip().startswith("#"):
@@ -182,6 +204,17 @@ def ollama_worker_init(args: argparse.Namespace, run_dir: Path) -> list[str]:
             # 1..N-1 (they fall back to CPU), so replace ROCR's list instead.
             lines.append(f"env -u HIP_VISIBLE_DEVICES ROCR_VISIBLE_DEVICES={gcds} {env} "
                          f"{ollama} serve >> {log} 2>&1 &")
+            # Start the servers one at a time: 8 GPU discoveries at once (each
+            # probes the GPU libraries from the network file system) overran
+            # Ollama's 30 s discovery watchdog on 2026-11-22, and every server
+            # fell back to the CPU. Wait until this one has finished discovery.
+            lines.append(f"for _ in $(seq 1 120); do grep -q 'default_num_ctx' {log} && break; sleep 1; done")
+    # Fail fast if any server found no GPU, instead of planning on the CPU until the time limit.
+    logs = ([run_dir / "ollama_serve.log"] if n == 1 else [run_dir / f"ollama_serve_{s}.log" for s in range(n)])
+    for lg in logs:
+        lines.append(f"for _ in $(seq 1 120); do grep -q 'default_num_ctx' {shlex.quote(str(lg))} && break; sleep 1; done")
+        lines.append(f"if grep -q 'total_vram=\"0 B\"' {shlex.quote(str(lg))}; then "
+                     f"echo \"Ollama found no GPU ({lg.name}) on $(hostname)\" >&2; exit 1; fi")
     for s in range(n):
         lh = f"OLLAMA_HOST=127.0.0.1:{port + s}"
         lines += [
@@ -198,6 +231,32 @@ def ollama_worker_init(args: argparse.Namespace, run_dir: Path) -> list[str]:
         'echo "Shared Ollama server ready at $OLLAMA_HOST"',
     ]
     return lines
+
+
+def grade_with_oracle(args, run_dir: Path, specs: dict, plan_status: dict, campaign, wait_all) -> dict:
+    """Grade every plan against its task's computed answer (learn/oracle.py); with
+    --oracle-retry, plan each wrong one once more with the oracle's hint."""
+    from learn.oracle import grade
+    tasks = {i + 1: t for i, t in enumerate(args.task_records)}
+    rows = {i: {"task": t["id"], "question": t["question"], "plan_status": plan_status.get(i),
+                "first": grade(specs.get(i), t), "retry": None} for i, t in tasks.items()}
+    t0 = time.time()
+    if args.oracle_retry:
+        todo = {i: r["first"]["hint"] for i, r in rows.items() if not r["first"]["correct"] and r["first"]["hint"]}
+        futures = {i: campaign(i, ["--plan-only", "../spec_retry.json", "--plan-hint", hint],
+                               str(run_dir / f"plan_retry_{i}.log"), "plan_retry") for i, hint in todo.items()}
+        if futures:
+            print(f"[oracle] {len(futures)} wrong plan(s) sent back once with a hint")
+            wait_all(futures, "retry")
+        for i in todo:
+            path = run_dir / f"task_{i}" / "spec_retry.json"
+            rows[i]["retry"] = grade(json.loads(path.read_text()) if path.exists() else None, tasks[i])
+    (run_dir / "oracle.json").write_text(json.dumps(rows, indent=1, default=str))
+    first = sum(r["first"]["correct"] for r in rows.values())
+    final = sum(r["first"]["correct"] or bool(r["retry"] and r["retry"]["correct"]) for r in rows.values())
+    print(f"[oracle] correct first try {first}/{len(rows)}, after one hinted retry {final}/{len(rows)}")
+    return {"tasks": len(rows), "first_try_correct": first, "final_correct": final,
+            "retry_wall_s": round(time.time() - t0, 1)}
 
 
 def backend_args(args: argparse.Namespace) -> list[str]:
@@ -237,6 +296,8 @@ def main() -> None:
         f"export OMP_NUM_THREADS={threads} OPENBLAS_NUM_THREADS={threads} MKL_NUM_THREADS={threads}",
         *([f"export COMPCHEM_DB={shlex.quote(args.db)}"] if args.db else []),
         f"export COMPCHEM_RUN_ID={run_dir.name}",
+        *(["export COMPCHEM_TRACE=1"] if args.trace else []),
+        *([f"export COMPCHEM_LESSONS={shlex.quote(args.lessons)}"] if args.lessons else []),
         *([f"export COMPCHEM_PLAN_CRITIC_SKILL={shlex.quote(args.plan_critic_skill)}"]
           if args.plan_critic_skill else []),
         *(ollama_worker_init(args, run_dir) if args.backend == "ollama" else []),
@@ -328,54 +389,59 @@ def main() -> None:
                     specs[i] = json.loads(path.read_text())
             summary["stages"]["plan"] = {"tasks": args.total_tasks, "specs_ok": len(specs),
                                          "wall_s": round(time.time() - t0, 1)}
+            if args.task_records:
+                summary["stages"]["oracle"] = grade_with_oracle(args, run_dir, specs, plan_status, campaign, wait_all)
+            if args.plan_stage_only:
+                results = dict(plan_status)
 
-            # Stage 2: compute unique species not already in the database
-            t0 = time.time()
-            spec_ids = list(specs)
-            requests, total, skipped = collect_requests([specs[i] for i in spec_ids])
-            hits, missing = split_cached(requests, db)
-            req_file = run_dir / "species_requests.json"
-            req_file.write_text(json.dumps(missing, indent=2))
-            (run_dir / "species").mkdir(exist_ok=True)
-            print(f"[stage 2] species needed: {total} across specs -> {len(requests)} unique -> "
-                  f"{len(hits)} already in DB, {len(missing)} to compute")
-            futures = {
-                j: run_cmd(shlex.quote(str(run_dir / "species" / f"species_{j}")),
-                           shlex.join(["python", "-m", "agents.compute_species",
-                                       "--requests", str(req_file), "--index", str(j)]),
-                           stdout=str(run_dir / "species" / f"species_{j}.log"),
-                           stderr=str(run_dir / "species" / f"species_{j}.log"))
-                for j in range(len(missing))
-            }
-            species_status = wait_all(futures, "species")
-            # A species task killed mid-compute (worker loss, walltime) leaves its
-            # claim 'running'; fail it now so assemble tasks don't wait on it.
-            released = db.release_run_claims(run_dir.name, "claim abandoned during compute stage")
-            summary["stages"]["compute"] = {
-                "species_requested": total, "species_unique": len(requests), "db_hits": len(hits),
-                "tasks": len(missing),
-                "tasks_ok": sum(v == "COMPLETED" for v in species_status.values()),
-                "claims_released": released,
-                "specs_not_deduplicated": [spec_ids[k] for k in skipped],
-                "wall_s": round(time.time() - t0, 1),
-                "species": [{"smiles": r["smiles"], "charge": r["charge"], "multiplicity": r["multiplicity"],
-                             "method": f"{r['xc']}/{r['basis']}", "needed_by": r["needed_by"],
-                             "status": species_status.get(j, "?")}
-                            for j, r in enumerate(missing)]
-                           + [{"smiles": r["smiles"], "charge": r["charge"], "multiplicity": r["multiplicity"],
-                               "method": f"{r['xc']}/{r['basis']}", "needed_by": r["needed_by"],
-                               "status": "DB_HIT"} for r in hits],
-            }
+            if not args.plan_stage_only:
+                # Stage 2: compute unique species not already in the database
+                t0 = time.time()
+                spec_ids = list(specs)
+                requests, total, skipped = collect_requests([specs[i] for i in spec_ids])
+                hits, missing = split_cached(requests, db)
+                req_file = run_dir / "species_requests.json"
+                req_file.write_text(json.dumps(missing, indent=2))
+                (run_dir / "species").mkdir(exist_ok=True)
+                print(f"[stage 2] species needed: {total} across specs -> {len(requests)} unique -> "
+                      f"{len(hits)} already in DB, {len(missing)} to compute")
+                futures = {
+                    j: run_cmd(shlex.quote(str(run_dir / "species" / f"species_{j}")),
+                               shlex.join(["python", "-m", "agents.compute_species",
+                                           "--requests", str(req_file), "--index", str(j)]),
+                               stdout=str(run_dir / "species" / f"species_{j}.log"),
+                               stderr=str(run_dir / "species" / f"species_{j}.log"))
+                    for j in range(len(missing))
+                }
+                species_status = wait_all(futures, "species")
+                # A species task killed mid-compute (worker loss, walltime) leaves its
+                # claim 'running'; fail it now so assemble tasks don't wait on it.
+                released = db.release_run_claims(run_dir.name, "claim abandoned during compute stage")
+                summary["stages"]["compute"] = {
+                    "species_requested": total, "species_unique": len(requests), "db_hits": len(hits),
+                    "tasks": len(missing),
+                    "tasks_ok": sum(v == "COMPLETED" for v in species_status.values()),
+                    "claims_released": released,
+                    "specs_not_deduplicated": [spec_ids[k] for k in skipped],
+                    "wall_s": round(time.time() - t0, 1),
+                    "species": [{"smiles": r["smiles"], "charge": r["charge"], "multiplicity": r["multiplicity"],
+                                 "method": f"{r['xc']}/{r['basis']}", "needed_by": r["needed_by"],
+                                 "status": species_status.get(j, "?")}
+                                for j, r in enumerate(missing)]
+                               + [{"smiles": r["smiles"], "charge": r["charge"], "multiplicity": r["multiplicity"],
+                                   "method": f"{r['xc']}/{r['basis']}", "needed_by": r["needed_by"],
+                                   "status": "DB_HIT"} for r in hits],
+                }
 
-            # Stage 3: assemble every planned campaign from the database
-            t0 = time.time()
-            futures = {i: campaign(i, ["--from-spec", "spec.json"], str(run_dir / f"task_{i}.log"))
-                       for i in specs}
-            print(f"[stage 3] {len(futures)} assemble tasks submitted")
-            results = wait_all(futures, "task")
-            for i in tasks:
-                results.setdefault(i, f"NO SPEC (planning {plan_status.get(i)})")
-            summary["stages"]["assemble"] = {"tasks": len(futures), "wall_s": round(time.time() - t0, 1)}
+                # Stage 3: assemble every planned campaign from the database
+                t0 = time.time()
+                futures = {i: campaign(i, ["--from-spec", "spec.json"], str(run_dir / f"task_{i}.log"))
+                           for i in specs}
+                print(f"[stage 3] {len(futures)} assemble tasks submitted")
+                results = wait_all(futures, "task")
+                for i in tasks:
+                    results.setdefault(i, f"NO SPEC (planning {plan_status.get(i)})")
+                summary["stages"]["assemble"] = {"tasks": len(futures), "wall_s": round(time.time() - t0, 1)}
     finally:
         if dfk is not None:
             dfk.cleanup()
