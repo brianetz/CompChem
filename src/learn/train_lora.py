@@ -59,12 +59,12 @@ def render(tok, ex: dict, reply: dict, max_len: int):
 
 def seq_logp(model, ids, p_len, device):
     ids = ids.to(device)
-    logits = model(input_ids=ids).logits[:, :-1].float()
-    tgt = ids[:, 1:]
-    lp = torch.log_softmax(logits, -1).gather(-1, tgt.unsqueeze(-1)).squeeze(-1)
-    mask = torch.zeros_like(tgt, dtype=torch.bool)
-    mask[:, max(0, p_len - 1):] = True
-    return (lp * mask).sum(), mask.sum()
+    start = max(0, p_len - 1)
+    # only the reply's positions are scored: convert just that slice to float32
+    logits = model(input_ids=ids).logits[:, start:-1]
+    tgt = ids[:, start + 1:].to(logits.device)
+    lp = torch.log_softmax(logits.float(), -1).gather(-1, tgt.unsqueeze(-1)).squeeze(-1)
+    return lp.sum(), torch.tensor(lp.numel(), device=lp.device)
 
 
 class Log:
@@ -158,7 +158,7 @@ def main():
     ap.add_argument("--rank", type=int, default=16)
     ap.add_argument("--lr", type=float, default=1e-4)
     ap.add_argument("--dpo-lr", type=float, default=2e-5)
-    ap.add_argument("--sft-epochs", type=int, default=2)
+    ap.add_argument("--sft-epochs", type=int, default=1)
     ap.add_argument("--dpo-epochs", type=int, default=1)
     ap.add_argument("--accum", type=int, default=8)
     ap.add_argument("--beta", type=float, default=0.1)
@@ -178,9 +178,18 @@ def main():
                                              target_modules=TARGETS, task_type="CAUSAL_LM"))
     dev = model.get_input_embeddings().weight.device
     sft, dpo = load_jsonl(a.sft), load_jsonl(a.dpo)
-    log(stage="start", sft=len(sft), dpo=len(dpo), args=vars(a))
+
+    def fits(ex, key):   # skip, rather than cut, examples longer than --max-len
+        return render(tok, ex, ex[key], 10 ** 6)[0].shape[1] <= a.max_len
+    n_sft, n_dpo = len(sft), len(dpo)
+    sft = [r for r in sft if fits(r, "reply")]
+    dpo = [r for r in dpo if fits(r, "chosen") and fits(r, "rejected")]
+    log(stage="start", sft=len(sft), dpo=len(dpo), skipped_too_long={"sft": n_sft - len(sft), "dpo": n_dpo - len(dpo)},
+        args=vars(a))
     if sft:
         run_sft(model, tok, sft, a, dev, log)
+        model.save_pretrained(os.path.join(a.out, "after_sft"))
+        log(stage="saved_sft", out=os.path.join(a.out, "after_sft"))
     if dpo:
         run_dpo(model, tok, dpo, a, dev, log)
     model.save_pretrained(a.out)

@@ -188,33 +188,47 @@ def ollama_worker_init(args: argparse.Namespace, run_dir: Path) -> list[str]:
     n = args.ollama_servers
     if n < 1 or 8 % n:
         raise SystemExit("--ollama-servers must divide the 8 GCDs (1, 2, 4 or 8)")
+    rest_env = server_env.split(" ", 1)[1]   # everything but OLLAMA_HOST
+    src_bin = args.ollama_bin
+    lines += [
+        # Run Ollama from a node-local copy: GPU discovery loads the GPU libraries several
+        # times, and reading them from the home NFS overran Ollama's 30 s discovery
+        # watchdog on 2026-11-22 even for a single server (it then falls back to the CPU).
+        f"OLLAMA_SRC=$(dirname $(dirname {shlex.quote(src_bin)}))",
+        "OLLAMA_LOCAL=/tmp/ollama-${SLURM_JOB_ID:-$$}",
+        'mkdir -p "$OLLAMA_LOCAL" && (rsync -a --exclude "cuda_*" --exclude "vulkan*" "$OLLAMA_SRC"/ "$OLLAMA_LOCAL"/ '
+        '2>/dev/null || cp -r "$OLLAMA_SRC"/. "$OLLAMA_LOCAL"/)',
+        f'OLLAMA_BIN="$OLLAMA_LOCAL/bin/ollama"; [ -x "$OLLAMA_BIN" ] || OLLAMA_BIN={shlex.quote(src_bin)}',
+        # start_ollama <gcds or ''> <port> <log>: start one server, wait for its GPU discovery,
+        # and restart it (up to 3 tries) if it found no GPU; stop the block if it never does.
+        "start_ollama() {",
+        "  for try in 1 2 3; do",
+        '    n0=$(grep -c default_num_ctx "$3" 2>/dev/null || echo 0)',
+        '    echo "--- start try $try $(date -Is)" >> "$3"',
+        '    if [ -n "$1" ]; then env -u HIP_VISIBLE_DEVICES ROCR_VISIBLE_DEVICES="$1" OLLAMA_HOST=0.0.0.0:"$2" '
+        f'{rest_env} "$OLLAMA_BIN" serve >> "$3" 2>&1 &',
+        f'    else OLLAMA_HOST=0.0.0.0:"$2" {rest_env} "$OLLAMA_BIN" serve >> "$3" 2>&1 & fi',
+        "    pid=$!",
+        '    for _ in $(seq 1 150); do [ "$(grep -c default_num_ctx "$3")" -gt "$n0" ] && break; sleep 1; done',
+        "    if grep total_vram= \"$3\" | tail -1 | grep -q 'total_vram=\"0 B\"'; then",
+        '      echo "server on GCDs $1 found no GPU (try $try); restarting" >&2; kill $pid; sleep 5; continue',
+        "    fi",
+        "    return 0",
+        "  done",
+        '  echo "Ollama found no GPU after 3 tries ($3) on $(hostname)" >&2; exit 1',
+        "}",
+    ]
     if n == 1:
-        # Append: when Parsl replaces a timed-out block, the new server must
-        # not overwrite the first block's log.
-        lines.append(f"{server_env} "
-                     f"{ollama} serve >> {shlex.quote(str(run_dir / 'ollama_serve.log'))} 2>&1 &")
+        lines.append(f"start_ollama '' {port} {shlex.quote(str(run_dir / 'ollama_serve.log'))}")
     else:
         per = 8 // n
         for s in range(n):
             gcds = ",".join(str(g) for g in range(s * per, (s + 1) * per))
-            env = server_env.replace(f"0.0.0.0:{port}", f"0.0.0.0:{port + s}")
-            log = shlex.quote(str(run_dir / f"ollama_serve_{s}.log"))
-            # Slurm already sets ROCR_VISIBLE_DEVICES=0-7; restricting with
-            # HIP_VISIBLE_DEVICES on top of it hides every GPU from servers
-            # 1..N-1 (they fall back to CPU), so replace ROCR's list instead.
-            lines.append(f"env -u HIP_VISIBLE_DEVICES ROCR_VISIBLE_DEVICES={gcds} {env} "
-                         f"{ollama} serve >> {log} 2>&1 &")
-            # Start the servers one at a time: 8 GPU discoveries at once (each
-            # probes the GPU libraries from the network file system) overran
-            # Ollama's 30 s discovery watchdog on 2026-11-22, and every server
-            # fell back to the CPU. Wait until this one has finished discovery.
-            lines.append(f"for _ in $(seq 1 120); do grep -q 'default_num_ctx' {log} && break; sleep 1; done")
-    # Fail fast if any server found no GPU, instead of planning on the CPU until the time limit.
-    logs = ([run_dir / "ollama_serve.log"] if n == 1 else [run_dir / f"ollama_serve_{s}.log" for s in range(n)])
-    for lg in logs:
-        lines.append(f"for _ in $(seq 1 120); do grep -q 'default_num_ctx' {shlex.quote(str(lg))} && break; sleep 1; done")
-        lines.append(f"if grep -q 'total_vram=\"0 B\"' {shlex.quote(str(lg))}; then "
-                     f"echo \"Ollama found no GPU ({lg.name}) on $(hostname)\" >&2; exit 1; fi")
+            # Slurm sets ROCR_VISIBLE_DEVICES=0-7; each server replaces that list (adding
+            # HIP_VISIBLE_DEVICES on top hides every GPU from servers 1..N-1). One at a
+            # time: 8 discoveries at once also overran the watchdog.
+            lines.append(f"start_ollama {gcds} {port + s} {shlex.quote(str(run_dir / f'ollama_serve_{s}.log'))}")
+    ollama = '"$OLLAMA_BIN"'
     for s in range(n):
         lh = f"OLLAMA_HOST=127.0.0.1:{port + s}"
         lines += [
