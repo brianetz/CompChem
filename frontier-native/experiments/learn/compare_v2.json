@@ -1,0 +1,2844 @@
+{
+ "arms": {
+  "A": {
+   "first_try_correct": {
+    "mean": 46.333,
+    "min": 45,
+    "max": 49,
+    "values": [
+     45,
+     45,
+     49
+    ]
+   },
+   "after_retry_correct": {
+    "mean": 48.333,
+    "min": 46,
+    "max": 52,
+    "values": [
+     47,
+     46,
+     52
+    ]
+   },
+   "wrong_plan_caught_by_oracle": {
+    "mean": 4.667,
+    "min": 4,
+    "max": 6,
+    "values": [
+     6,
+     4,
+     4
+    ]
+   },
+   "no_plan": {
+    "mean": 14,
+    "min": 12,
+    "max": 16,
+    "values": [
+     14,
+     16,
+     12
+    ]
+   },
+   "format_failure_rate": {
+    "mean": 0.52,
+    "min": 0.5,
+    "max": 0.534,
+    "values": [
+     0.534,
+     0.526,
+     0.5
+    ]
+   },
+   "content_mistake_rate": {
+    "mean": 0.097,
+    "min": 0.087,
+    "max": 0.11,
+    "values": [
+     0.11,
+     0.093,
+     0.087
+    ]
+   },
+   "attempts_per_campaign": {
+    "mean": 8.8,
+    "min": 8.3,
+    "max": 9.4,
+    "values": [
+     9.4,
+     8.7,
+     8.3
+    ]
+   },
+   "plan_wall_min": {
+    "mean": 164.333,
+    "min": 156.1,
+    "max": 177.9,
+    "values": [
+     156.1,
+     177.9,
+     159.0
+    ]
+   },
+   "first_attempt_accept_by_module": {
+    "fragments": [
+     41,
+     187
+    ],
+    "method": [
+     148,
+     156
+    ],
+    "rationale": [
+     146,
+     155
+    ],
+    "target": [
+     110,
+     195
+    ]
+   },
+   "by_bond_class": {
+    "C-Br": [
+     3,
+     3
+    ],
+    "C-C": [
+     29,
+     42
+    ],
+    "C-Cl": [
+     23,
+     24
+    ],
+    "C-F": [
+     3,
+     3
+    ],
+    "C-H": [
+     53,
+     90
+    ],
+    "C-N": [
+     7,
+     9
+    ],
+    "C-O": [
+     2,
+     3
+    ],
+    "C-S": [
+     3,
+     3
+    ],
+    "N-H": [
+     10,
+     12
+    ],
+    "N-N": [
+     3,
+     3
+    ],
+    "S-H": [
+     3,
+     3
+    ]
+   },
+   "failure_classes_total": {
+    "no_plan": 42,
+    "wrong_bond": 13,
+    "wrong_parent": 1
+   },
+   "always_correct": 36,
+   "solved_by_any": 56,
+   "repeats": [
+    {
+     "campaigns": 65,
+     "first_try_correct": 45,
+     "after_retry_correct": 47,
+     "wrong_plan_caught_by_oracle": 6,
+     "failure_classes": {
+      "no_plan": 14,
+      "wrong_bond": 6
+     },
+     "attempts": 610,
+     "format_failure_rate": 0.534,
+     "content_mistake_rate": 0.11,
+     "first_attempt_accept_by_module": {
+      "fragments": [
+       12,
+       62
+      ],
+      "method": [
+       46,
+       52
+      ],
+      "rationale": [
+       49,
+       52
+      ],
+      "target": [
+       34,
+       65
+      ]
+     },
+     "attempts_per_campaign": 9.4,
+     "by_bond_class": {
+      "C-H": [
+       17,
+       30
+      ],
+      "C-C": [
+       10,
+       14
+      ],
+      "C-Cl": [
+       7,
+       8
+      ],
+      "N-H": [
+       3,
+       4
+      ],
+      "C-N": [
+       2,
+       3
+      ],
+      "N-N": [
+       1,
+       1
+      ],
+      "C-O": [
+       1,
+       1
+      ],
+      "C-S": [
+       1,
+       1
+      ],
+      "S-H": [
+       1,
+       1
+      ],
+      "C-F": [
+       1,
+       1
+      ],
+      "C-Br": [
+       1,
+       1
+      ]
+     },
+     "tasks_correct": [
+      "1,3-butadiene:C-C",
+      "1-butene:C-C_bond_between_the_methine_group_and_the_methylene",
+      "1-butene:C-C_bond_between_the_methyl_group_and_the_methylene",
+      "1-butene:methyl_C-H",
+      "acetamide:C-C",
+      "acetamide:C-N",
+      "acetamide:N-H",
+      "acetamide:methyl_C-H",
+      "benzene:aromatic_ring_C-H",
+      "benzyl_chloride:C-Cl",
+      "bromoethane:C-Br",
+      "bromoethane:C-C",
+      "bromoethane:methyl_C-H",
+      "bromoethane:methylene_C-H",
+      "butanone:C-C_bond_between_the_carbonyl_group_and_the_methylene",
+      "butanone:methylene_C-H",
+      "chlorobenzene:C-Cl",
+      "chloroethane:C-Cl",
+      "chloroform:C-Cl",
+      "chloromethane:C-Cl",
+      "cyclohexene:methylene_C-H",
+      "dichloromethane:C-Cl",
+      "diethyl_ether:C-O",
+      "diethyl_ether:methyl_C-H",
+      "diethyl_ether:methylene_C-H",
+      "dimethylamine:C-N",
+      "dimethylamine:N-H",
+      "ethane:C-C",
+      "ethane:methyl_C-H",
+      "ethylene:vinylic_C-H",
+      "fluoromethane:C-F",
+      "fluoromethane:methyl_C-H",
+      "hydrazine:N-H",
+      "hydrazine:N-N",
+      "isobutylene:vinylic_C-H",
+      "methanethiol:C-S",
+      "methanethiol:S-H",
+      "methanethiol:methyl_C-H",
+      "neopentane:C-C",
+      "neopentane:methyl_C-H",
+      "propene:C-C",
+      "propene:allylic_C-H",
+      "styrene:C-C",
+      "styrene:para_ring_C-H",
+      "vinyl_chloride:C-Cl"
+     ],
+     "no_plan": 14,
+     "plan_wall_min": 156.1,
+     "runs": [
+      "run_20261123_224338",
+      "run_20261123_233343",
+      "run_20261124_010535"
+     ]
+    },
+    {
+     "campaigns": 65,
+     "first_try_correct": 45,
+     "after_retry_correct": 46,
+     "wrong_plan_caught_by_oracle": 4,
+     "failure_classes": {
+      "no_plan": 16,
+      "wrong_bond": 4
+     },
+     "attempts": 557,
+     "format_failure_rate": 0.526,
+     "content_mistake_rate": 0.093,
+     "first_attempt_accept_by_module": {
+      "fragments": [
+       14,
+       63
+      ],
+      "method": [
+       49,
+       50
+      ],
+      "rationale": [
+       48,
+       50
+      ],
+      "target": [
+       36,
+       65
+      ]
+     },
+     "attempts_per_campaign": 8.7,
+     "by_bond_class": {
+      "C-H": [
+       16,
+       30
+      ],
+      "C-C": [
+       10,
+       14
+      ],
+      "C-Cl": [
+       8,
+       8
+      ],
+      "N-H": [
+       4,
+       4
+      ],
+      "C-N": [
+       2,
+       3
+      ],
+      "N-N": [
+       1,
+       1
+      ],
+      "C-O": [
+       0,
+       1
+      ],
+      "C-S": [
+       1,
+       1
+      ],
+      "S-H": [
+       1,
+       1
+      ],
+      "C-F": [
+       1,
+       1
+      ],
+      "C-Br": [
+       1,
+       1
+      ]
+     },
+     "tasks_correct": [
+      "1,3-butadiene:C-C",
+      "1-butene:C-C_bond_between_the_methine_group_and_the_methylene",
+      "1-butene:C-C_bond_between_the_methyl_group_and_the_methylene",
+      "1-butene:methyl_C-H",
+      "acetamide:C-C",
+      "acetamide:C-N",
+      "acetamide:N-H",
+      "acetamide:methyl_C-H",
+      "acetyl_chloride:C-Cl",
+      "benzene:aromatic_ring_C-H",
+      "benzyl_chloride:C-Cl",
+      "bromoethane:C-Br",
+      "bromoethane:C-C",
+      "bromoethane:methylene_C-H",
+      "butanone:C-C_bond_between_the_carbonyl_group_and_the_methyl",
+      "butanone:C-C_bond_between_the_carbonyl_group_and_the_methylene",
+      "butanone:methyl_C-H_next_to_the_carbonyl",
+      "butanone:methylene_C-H",
+      "chlorobenzene:C-Cl",
+      "chloroethane:C-Cl",
+      "chloroform:C-Cl",
+      "chloromethane:C-Cl",
+      "cyclohexene:methylene_C-H",
+      "dichloromethane:C-Cl",
+      "diethyl_ether:C-C",
+      "diethyl_ether:methylene_C-H",
+      "dimethylamine:C-N",
+      "dimethylamine:N-H",
+      "dimethylamine:methyl_C-H",
+      "ethane:C-C",
+      "ethane:methyl_C-H",
+      "ethylene:vinylic_C-H",
+      "fluoromethane:C-F",
+      "fluoromethane:methyl_C-H",
+      "formamide:N-H",
+      "hydrazine:N-H",
+      "hydrazine:N-N",
+      "isobutylene:allylic_C-H",
+      "methanethiol:C-S",
+      "methanethiol:S-H",
+      "methanethiol:methyl_C-H",
+      "propene:C-C",
+      "propene:allylic_C-H",
+      "pyridine:ring_C-H_at_the_4-position",
+      "vinyl_chloride:C-Cl"
+     ],
+     "no_plan": 16,
+     "plan_wall_min": 177.9,
+     "runs": [
+      "run_20261123_224340",
+      "run_20261123_235800",
+      "run_20261124_012046"
+     ]
+    },
+    {
+     "campaigns": 65,
+     "first_try_correct": 49,
+     "after_retry_correct": 52,
+     "wrong_plan_caught_by_oracle": 4,
+     "failure_classes": {
+      "no_plan": 12,
+      "wrong_parent": 1,
+      "wrong_bond": 3
+     },
+     "attempts": 540,
+     "format_failure_rate": 0.5,
+     "content_mistake_rate": 0.087,
+     "first_attempt_accept_by_module": {
+      "fragments": [
+       15,
+       62
+      ],
+      "method": [
+       53,
+       54
+      ],
+      "rationale": [
+       49,
+       53
+      ],
+      "target": [
+       40,
+       65
+      ]
+     },
+     "attempts_per_campaign": 8.3,
+     "by_bond_class": {
+      "C-H": [
+       20,
+       30
+      ],
+      "C-C": [
+       9,
+       14
+      ],
+      "C-Cl": [
+       8,
+       8
+      ],
+      "N-H": [
+       3,
+       4
+      ],
+      "C-N": [
+       3,
+       3
+      ],
+      "N-N": [
+       1,
+       1
+      ],
+      "C-O": [
+       1,
+       1
+      ],
+      "C-S": [
+       1,
+       1
+      ],
+      "S-H": [
+       1,
+       1
+      ],
+      "C-F": [
+       1,
+       1
+      ],
+      "C-Br": [
+       1,
+       1
+      ]
+     },
+     "tasks_correct": [
+      "1,3-butadiene:C-C",
+      "1-butene:C-C_bond_between_the_methine_group_and_the_methylene",
+      "1-butene:methyl_C-H",
+      "acetamide:C-C",
+      "acetamide:C-N",
+      "acetamide:N-H",
+      "acetamide:methyl_C-H",
+      "acetyl_chloride:C-Cl",
+      "benzene:aromatic_ring_C-H",
+      "benzyl_chloride:C-Cl",
+      "bromoethane:C-Br",
+      "bromoethane:C-C",
+      "bromoethane:methyl_C-H",
+      "bromoethane:methylene_C-H",
+      "butanone:C-C_bond_between_the_carbonyl_group_and_the_methylene",
+      "butanone:C-C_bond_between_the_methyl_group_and_the_methylene",
+      "butanone:methylene_C-H",
+      "chlorobenzene:C-Cl",
+      "chloroethane:C-Cl",
+      "chloroform:C-Cl",
+      "chloromethane:C-Cl",
+      "cyclohexene:methylene_C-H",
+      "dichloromethane:C-Cl",
+      "diethyl_ether:C-O",
+      "diethyl_ether:methyl_C-H",
+      "diethyl_ether:methylene_C-H",
+      "dimethylamine:C-N",
+      "dimethylamine:N-H",
+      "dimethylamine:methyl_C-H",
+      "ethane:C-C",
+      "ethane:methyl_C-H",
+      "ethylene:vinylic_C-H",
+      "fluoromethane:C-F",
+      "fluoromethane:methyl_C-H",
+      "formamide:C-N",
+      "hydrazine:N-H",
+      "hydrazine:N-N",
+      "isobutylene:allylic_C-H",
+      "isobutylene:vinylic_C-H",
+      "methanethiol:C-S",
+      "methanethiol:S-H",
+      "methanethiol:methyl_C-H",
+      "neopentane:methyl_C-H",
+      "propene:C-C",
+      "propene:allylic_C-H",
+      "pyridine:ring_C-H_at_the_2-position",
+      "styrene:C-C",
+      "styrene:para_ring_C-H",
+      "vinyl_chloride:C-Cl"
+     ],
+     "no_plan": 12,
+     "plan_wall_min": 159.0,
+     "runs": [
+      "run_20261123_224343",
+      "run_20261124_001523",
+      "run_20261124_011717"
+     ]
+    }
+   ]
+  },
+  "B": {
+   "first_try_correct": {
+    "mean": 44.667,
+    "min": 42,
+    "max": 47,
+    "values": [
+     45,
+     47,
+     42
+    ]
+   },
+   "after_retry_correct": {
+    "mean": 46.333,
+    "min": 43,
+    "max": 49,
+    "values": [
+     47,
+     49,
+     43
+    ]
+   },
+   "wrong_plan_caught_by_oracle": {
+    "mean": 4,
+    "min": 3,
+    "max": 5,
+    "values": [
+     5,
+     3,
+     4
+    ]
+   },
+   "no_plan": {
+    "mean": 16.333,
+    "min": 15,
+    "max": 19,
+    "values": [
+     15,
+     15,
+     19
+    ]
+   },
+   "format_failure_rate": {
+    "mean": 0.437,
+    "min": 0.422,
+    "max": 0.465,
+    "values": [
+     0.422,
+     0.423,
+     0.465
+    ]
+   },
+   "content_mistake_rate": {
+    "mean": 0.189,
+    "min": 0.173,
+    "max": 0.205,
+    "values": [
+     0.173,
+     0.205,
+     0.188
+    ]
+   },
+   "attempts_per_campaign": {
+    "mean": 10.0,
+    "min": 9.3,
+    "max": 10.5,
+    "values": [
+     9.3,
+     10.2,
+     10.5
+    ]
+   },
+   "plan_wall_min": {
+    "mean": 225.233,
+    "min": 191.9,
+    "max": 272.6,
+    "values": [
+     191.9,
+     272.6,
+     211.2
+    ]
+   },
+   "first_attempt_accept_by_module": {
+    "fragments": [
+     59,
+     182
+    ],
+    "method": [
+     144,
+     150
+    ],
+    "rationale": [
+     100,
+     146
+    ],
+    "target": [
+     60,
+     195
+    ]
+   },
+   "by_bond_class": {
+    "C-Br": [
+     3,
+     3
+    ],
+    "C-C": [
+     24,
+     42
+    ],
+    "C-Cl": [
+     20,
+     24
+    ],
+    "C-F": [
+     3,
+     3
+    ],
+    "C-H": [
+     62,
+     90
+    ],
+    "C-N": [
+     4,
+     9
+    ],
+    "C-O": [
+     3,
+     3
+    ],
+    "C-S": [
+     3,
+     3
+    ],
+    "N-H": [
+     6,
+     12
+    ],
+    "N-N": [
+     3,
+     3
+    ],
+    "S-H": [
+     3,
+     3
+    ]
+   },
+   "failure_classes_total": {
+    "no_plan": 49,
+    "wrong_parent": 7,
+    "wrong_bond": 5
+   },
+   "always_correct": 32,
+   "solved_by_any": 58,
+   "repeats": [
+    {
+     "campaigns": 65,
+     "first_try_correct": 45,
+     "after_retry_correct": 47,
+     "wrong_plan_caught_by_oracle": 5,
+     "failure_classes": {
+      "no_plan": 15,
+      "wrong_parent": 2,
+      "wrong_bond": 3
+     },
+     "attempts": 606,
+     "format_failure_rate": 0.422,
+     "content_mistake_rate": 0.173,
+     "first_attempt_accept_by_module": {
+      "fragments": [
+       20,
+       59
+      ],
+      "method": [
+       49,
+       50
+      ],
+      "rationale": [
+       36,
+       50
+      ],
+      "target": [
+       21,
+       65
+      ]
+     },
+     "attempts_per_campaign": 9.3,
+     "by_bond_class": {
+      "C-H": [
+       21,
+       30
+      ],
+      "C-C": [
+       8,
+       14
+      ],
+      "C-Cl": [
+       7,
+       8
+      ],
+      "N-H": [
+       2,
+       4
+      ],
+      "C-N": [
+       1,
+       3
+      ],
+      "N-N": [
+       1,
+       1
+      ],
+      "C-O": [
+       1,
+       1
+      ],
+      "C-S": [
+       1,
+       1
+      ],
+      "S-H": [
+       1,
+       1
+      ],
+      "C-F": [
+       1,
+       1
+      ],
+      "C-Br": [
+       1,
+       1
+      ]
+     },
+     "tasks_correct": [
+      "1,3-butadiene:C-C",
+      "1-butene:C-C_bond_between_the_methine_group_and_the_methylene",
+      "1-butene:methyl_C-H",
+      "acetamide:C-C",
+      "acetamide:C-N",
+      "acetamide:N-H",
+      "acetamide:methyl_C-H",
+      "acetyl_chloride:C-Cl",
+      "benzene:aromatic_ring_C-H",
+      "benzyl_chloride:C-Cl",
+      "bromoethane:C-Br",
+      "bromoethane:C-C",
+      "bromoethane:methyl_C-H",
+      "bromoethane:methylene_C-H",
+      "butanone:methyl_C-H_next_to_the_carbonyl",
+      "butanone:methylene_C-H",
+      "chlorobenzene:C-Cl",
+      "chloroethane:C-Cl",
+      "chloromethane:C-Cl",
+      "cyclohexene:methylene_C-H",
+      "dichloromethane:C-Cl",
+      "diethyl_ether:C-O",
+      "diethyl_ether:methyl_C-H",
+      "diethyl_ether:methylene_C-H",
+      "dimethylamine:N-H",
+      "ethane:C-C",
+      "ethane:methyl_C-H",
+      "ethylene:vinylic_C-H",
+      "fluoromethane:C-F",
+      "fluoromethane:methyl_C-H",
+      "hydrazine:N-N",
+      "isobutylene:allylic_C-H",
+      "isobutylene:vinylic_C-H",
+      "methanethiol:C-S",
+      "methanethiol:S-H",
+      "methanethiol:methyl_C-H",
+      "neopentane:C-C",
+      "neopentane:methyl_C-H",
+      "propene:C-C",
+      "propene:allylic_C-H",
+      "pyridine:ring_C-H_at_the_3-position",
+      "styrene:C-C",
+      "styrene:meta_ring_C-H",
+      "tetrahydrofuran:methylene_C-H_on_the_oxygen",
+      "vinyl_chloride:C-Cl"
+     ],
+     "no_plan": 15,
+     "plan_wall_min": 191.9,
+     "runs": [
+      "run_20261124_014540",
+      "run_20261124_031907",
+      "run_20261124_044447"
+     ]
+    },
+    {
+     "campaigns": 65,
+     "first_try_correct": 47,
+     "after_retry_correct": 49,
+     "wrong_plan_caught_by_oracle": 3,
+     "failure_classes": {
+      "no_plan": 15,
+      "wrong_parent": 3
+     },
+     "attempts": 660,
+     "format_failure_rate": 0.423,
+     "content_mistake_rate": 0.205,
+     "first_attempt_accept_by_module": {
+      "fragments": [
+       17,
+       62
+      ],
+      "method": [
+       48,
+       51
+      ],
+      "rationale": [
+       33,
+       50
+      ],
+      "target": [
+       21,
+       65
+      ]
+     },
+     "attempts_per_campaign": 10.2,
+     "by_bond_class": {
+      "C-H": [
+       21,
+       30
+      ],
+      "C-C": [
+       10,
+       14
+      ],
+      "C-Cl": [
+       6,
+       8
+      ],
+      "N-H": [
+       2,
+       4
+      ],
+      "C-N": [
+       2,
+       3
+      ],
+      "N-N": [
+       1,
+       1
+      ],
+      "C-O": [
+       1,
+       1
+      ],
+      "C-S": [
+       1,
+       1
+      ],
+      "S-H": [
+       1,
+       1
+      ],
+      "C-F": [
+       1,
+       1
+      ],
+      "C-Br": [
+       1,
+       1
+      ]
+     },
+     "tasks_correct": [
+      "1,3-butadiene:C-C",
+      "1-butene:allylic_C-H",
+      "1-butene:methyl_C-H",
+      "acetamide:C-C",
+      "acetamide:C-N",
+      "acetamide:N-H",
+      "acetamide:methyl_C-H",
+      "benzene:aromatic_ring_C-H",
+      "benzyl_chloride:C-Cl",
+      "bromoethane:C-Br",
+      "bromoethane:C-C",
+      "bromoethane:methyl_C-H",
+      "bromoethane:methylene_C-H",
+      "butanone:C-C_bond_between_the_carbonyl_group_and_the_methyl",
+      "butanone:C-C_bond_between_the_carbonyl_group_and_the_methylene",
+      "butanone:methyl_C-H_next_to_the_carbonyl",
+      "butanone:methylene_C-H",
+      "chlorobenzene:C-Cl",
+      "chloroethane:C-Cl",
+      "chloroform:C-Cl",
+      "chloromethane:C-Cl",
+      "dichloromethane:C-Cl",
+      "diethyl_ether:C-C",
+      "diethyl_ether:C-O",
+      "diethyl_ether:methyl_C-H",
+      "dimethylamine:C-N",
+      "dimethylamine:N-H",
+      "dimethylamine:methyl_C-H",
+      "ethane:C-C",
+      "ethane:methyl_C-H",
+      "ethylene:vinylic_C-H",
+      "fluoromethane:C-F",
+      "fluoromethane:methyl_C-H",
+      "formamide:formyl_C-H",
+      "hydrazine:N-N",
+      "isobutylene:allylic_C-H",
+      "isobutylene:vinylic_C-H",
+      "methanethiol:C-S",
+      "methanethiol:S-H",
+      "methanethiol:methyl_C-H",
+      "neopentane:C-C",
+      "neopentane:methyl_C-H",
+      "propene:C-C",
+      "propene:allylic_C-H",
+      "pyridine:ring_C-H_at_the_2-position",
+      "pyridine:ring_C-H_at_the_3-position",
+      "styrene:C-C"
+     ],
+     "no_plan": 15,
+     "plan_wall_min": 272.6,
+     "runs": [
+      "run_20261124_014543",
+      "run_20261124_030945",
+      "run_20261124_055637"
+     ]
+    },
+    {
+     "campaigns": 65,
+     "first_try_correct": 42,
+     "after_retry_correct": 43,
+     "wrong_plan_caught_by_oracle": 4,
+     "failure_classes": {
+      "no_plan": 19,
+      "wrong_bond": 2,
+      "wrong_parent": 2
+     },
+     "attempts": 680,
+     "format_failure_rate": 0.465,
+     "content_mistake_rate": 0.188,
+     "first_attempt_accept_by_module": {
+      "fragments": [
+       22,
+       61
+      ],
+      "method": [
+       47,
+       49
+      ],
+      "rationale": [
+       31,
+       46
+      ],
+      "target": [
+       18,
+       65
+      ]
+     },
+     "attempts_per_campaign": 10.5,
+     "by_bond_class": {
+      "C-H": [
+       20,
+       30
+      ],
+      "C-C": [
+       6,
+       14
+      ],
+      "C-Cl": [
+       7,
+       8
+      ],
+      "N-H": [
+       2,
+       4
+      ],
+      "C-N": [
+       1,
+       3
+      ],
+      "N-N": [
+       1,
+       1
+      ],
+      "C-O": [
+       1,
+       1
+      ],
+      "C-S": [
+       1,
+       1
+      ],
+      "S-H": [
+       1,
+       1
+      ],
+      "C-F": [
+       1,
+       1
+      ],
+      "C-Br": [
+       1,
+       1
+      ]
+     },
+     "tasks_correct": [
+      "1-butene:allylic_C-H",
+      "acetamide:C-C",
+      "acetamide:C-N",
+      "acetamide:N-H",
+      "acetamide:methyl_C-H",
+      "acetyl_chloride:C-Cl",
+      "benzene:aromatic_ring_C-H",
+      "bromoethane:C-Br",
+      "bromoethane:C-C",
+      "bromoethane:methyl_C-H",
+      "bromoethane:methylene_C-H",
+      "butanone:C-C_bond_between_the_methyl_group_and_the_methylene",
+      "butanone:methyl_C-H_next_to_the_carbonyl",
+      "butanone:methylene_C-H",
+      "chlorobenzene:C-Cl",
+      "chloroethane:C-Cl",
+      "chloroform:C-Cl",
+      "chloromethane:C-Cl",
+      "cyclohexene:allylic_C-H",
+      "cyclohexene:vinylic_C-H",
+      "dichloromethane:C-Cl",
+      "diethyl_ether:C-O",
+      "dimethylamine:methyl_C-H",
+      "ethane:C-C",
+      "ethane:methyl_C-H",
+      "ethylene:vinylic_C-H",
+      "fluoromethane:C-F",
+      "fluoromethane:methyl_C-H",
+      "hydrazine:N-H",
+      "hydrazine:N-N",
+      "isobutylene:allylic_C-H",
+      "isobutylene:vinylic_C-H",
+      "methanethiol:C-S",
+      "methanethiol:S-H",
+      "methanethiol:methyl_C-H",
+      "neopentane:C-C",
+      "neopentane:methyl_C-H",
+      "propene:C-C",
+      "propene:allylic_C-H",
+      "pyridine:ring_C-H_at_the_3-position",
+      "styrene:meta_ring_C-H",
+      "vinyl_chloride:C-Cl"
+     ],
+     "no_plan": 19,
+     "plan_wall_min": 211.2,
+     "runs": [
+      "run_20261124_014546",
+      "run_20261124_030211",
+      "run_20261124_044847"
+     ]
+    }
+   ]
+  },
+  "C": {
+   "first_try_correct": {
+    "mean": 46.333,
+    "min": 43,
+    "max": 49,
+    "values": [
+     47,
+     43,
+     49
+    ]
+   },
+   "after_retry_correct": {
+    "mean": 48.333,
+    "min": 43,
+    "max": 52,
+    "values": [
+     50,
+     43,
+     52
+    ]
+   },
+   "wrong_plan_caught_by_oracle": {
+    "mean": 5.667,
+    "min": 3,
+    "max": 7,
+    "values": [
+     7,
+     3,
+     7
+    ]
+   },
+   "no_plan": {
+    "mean": 13,
+    "min": 9,
+    "max": 19,
+    "values": [
+     11,
+     19,
+     9
+    ]
+   },
+   "format_failure_rate": {
+    "mean": 0.417,
+    "min": 0.388,
+    "max": 0.455,
+    "values": [
+     0.407,
+     0.455,
+     0.388
+    ]
+   },
+   "content_mistake_rate": {
+    "mean": 0.187,
+    "min": 0.168,
+    "max": 0.198,
+    "values": [
+     0.198,
+     0.195,
+     0.168
+    ]
+   },
+   "attempts_per_campaign": {
+    "mean": 8.867,
+    "min": 8.2,
+    "max": 9.2,
+    "values": [
+     9.2,
+     9.2,
+     8.2
+    ]
+   },
+   "plan_wall_min": {
+    "mean": 218.867,
+    "min": 209.5,
+    "max": 236.0,
+    "values": [
+     211.1,
+     236.0,
+     209.5
+    ]
+   },
+   "first_attempt_accept_by_module": {
+    "fragments": [
+     57,
+     188
+    ],
+    "method": [
+     155,
+     157
+    ],
+    "rationale": [
+     150,
+     157
+    ],
+    "target": [
+     111,
+     195
+    ]
+   },
+   "by_bond_class": {
+    "C-Br": [
+     3,
+     3
+    ],
+    "C-C": [
+     33,
+     42
+    ],
+    "C-Cl": [
+     20,
+     24
+    ],
+    "C-F": [
+     3,
+     3
+    ],
+    "C-H": [
+     57,
+     90
+    ],
+    "C-N": [
+     5,
+     9
+    ],
+    "C-O": [
+     3,
+     3
+    ],
+    "C-S": [
+     3,
+     3
+    ],
+    "N-H": [
+     7,
+     12
+    ],
+    "N-N": [
+     2,
+     3
+    ],
+    "S-H": [
+     3,
+     3
+    ]
+   },
+   "failure_classes_total": {
+    "wrong_parent": 8,
+    "no_plan": 39,
+    "wrong_bond": 9
+   },
+   "always_correct": 31,
+   "solved_by_any": 57,
+   "repeats": [
+    {
+     "campaigns": 65,
+     "first_try_correct": 47,
+     "after_retry_correct": 50,
+     "wrong_plan_caught_by_oracle": 7,
+     "failure_classes": {
+      "wrong_parent": 3,
+      "no_plan": 11,
+      "wrong_bond": 4
+     },
+     "attempts": 592,
+     "format_failure_rate": 0.407,
+     "content_mistake_rate": 0.198,
+     "first_attempt_accept_by_module": {
+      "fragments": [
+       18,
+       64
+      ],
+      "method": [
+       54,
+       54
+      ],
+      "rationale": [
+       52,
+       54
+      ],
+      "target": [
+       36,
+       65
+      ]
+     },
+     "attempts_per_campaign": 9.2,
+     "by_bond_class": {
+      "C-H": [
+       18,
+       30
+      ],
+      "C-C": [
+       12,
+       14
+      ],
+      "C-Cl": [
+       6,
+       8
+      ],
+      "N-H": [
+       3,
+       4
+      ],
+      "C-N": [
+       3,
+       3
+      ],
+      "N-N": [
+       0,
+       1
+      ],
+      "C-O": [
+       1,
+       1
+      ],
+      "C-S": [
+       1,
+       1
+      ],
+      "S-H": [
+       1,
+       1
+      ],
+      "C-F": [
+       1,
+       1
+      ],
+      "C-Br": [
+       1,
+       1
+      ]
+     },
+     "tasks_correct": [
+      "1,3-butadiene:C-C",
+      "1-butene:C-C_bond_between_the_methine_group_and_the_methylene",
+      "1-butene:C-C_bond_between_the_methyl_group_and_the_methylene",
+      "1-butene:methyl_C-H",
+      "acetamide:C-C",
+      "acetamide:C-N",
+      "acetamide:N-H",
+      "acetamide:methyl_C-H",
+      "acetyl_chloride:C-Cl",
+      "benzene:aromatic_ring_C-H",
+      "benzyl_chloride:C-Cl",
+      "bromoethane:C-Br",
+      "bromoethane:C-C",
+      "bromoethane:methylene_C-H",
+      "butanone:C-C_bond_between_the_carbonyl_group_and_the_methyl",
+      "butanone:C-C_bond_between_the_methyl_group_and_the_methylene",
+      "butanone:methyl_C-H_next_to_the_carbonyl",
+      "chlorobenzene:C-Cl",
+      "chloroethane:C-Cl",
+      "chloromethane:C-Cl",
+      "cyclohexene:allylic_C-H",
+      "cyclohexene:methylene_C-H",
+      "dichloromethane:C-Cl",
+      "diethyl_ether:C-C",
+      "diethyl_ether:C-O",
+      "diethyl_ether:methyl_C-H",
+      "diethyl_ether:methylene_C-H",
+      "dimethylamine:C-N",
+      "dimethylamine:N-H",
+      "dimethylamine:methyl_C-H",
+      "ethane:C-C",
+      "ethane:methyl_C-H",
+      "ethylene:vinylic_C-H",
+      "fluoromethane:C-F",
+      "fluoromethane:methyl_C-H",
+      "formamide:C-N",
+      "formamide:formyl_C-H",
+      "hydrazine:N-H",
+      "isobutylene:vinylic_C-H",
+      "methanethiol:C-S",
+      "methanethiol:S-H",
+      "methanethiol:methyl_C-H",
+      "neopentane:C-C",
+      "neopentane:methyl_C-H",
+      "propene:C-C",
+      "propene:allylic_C-H",
+      "styrene:C-C"
+     ],
+     "no_plan": 11,
+     "plan_wall_min": 211.1,
+     "runs": [
+      "run_20261124_031154",
+      "run_20261124_050938",
+      "run_20261124_062805"
+     ]
+    },
+    {
+     "campaigns": 65,
+     "first_try_correct": 43,
+     "after_retry_correct": 43,
+     "wrong_plan_caught_by_oracle": 3,
+     "failure_classes": {
+      "no_plan": 19,
+      "wrong_parent": 1,
+      "wrong_bond": 2
+     },
+     "attempts": 589,
+     "format_failure_rate": 0.455,
+     "content_mistake_rate": 0.195,
+     "first_attempt_accept_by_module": {
+      "fragments": [
+       22,
+       62
+      ],
+      "method": [
+       47,
+       47
+      ],
+      "rationale": [
+       44,
+       47
+      ],
+      "target": [
+       39,
+       65
+      ]
+     },
+     "attempts_per_campaign": 9.2,
+     "by_bond_class": {
+      "C-H": [
+       18,
+       30
+      ],
+      "C-C": [
+       8,
+       14
+      ],
+      "C-Cl": [
+       7,
+       8
+      ],
+      "N-H": [
+       2,
+       4
+      ],
+      "C-N": [
+       2,
+       3
+      ],
+      "N-N": [
+       1,
+       1
+      ],
+      "C-O": [
+       1,
+       1
+      ],
+      "C-S": [
+       1,
+       1
+      ],
+      "S-H": [
+       1,
+       1
+      ],
+      "C-F": [
+       1,
+       1
+      ],
+      "C-Br": [
+       1,
+       1
+      ]
+     },
+     "tasks_correct": [
+      "1-butene:methyl_C-H",
+      "acetamide:C-C",
+      "acetamide:C-N",
+      "acetamide:N-H",
+      "acetamide:methyl_C-H",
+      "benzene:aromatic_ring_C-H",
+      "benzyl_chloride:C-Cl",
+      "bromoethane:C-Br",
+      "bromoethane:C-C",
+      "bromoethane:methylene_C-H",
+      "butanone:C-C_bond_between_the_carbonyl_group_and_the_methyl",
+      "butanone:C-C_bond_between_the_methyl_group_and_the_methylene",
+      "butanone:methyl_C-H_next_to_the_carbonyl",
+      "butanone:methylene_C-H",
+      "chlorobenzene:C-Cl",
+      "chloroethane:C-Cl",
+      "chloroform:C-Cl",
+      "chloromethane:C-Cl",
+      "cyclohexene:methylene_C-H",
+      "dichloromethane:C-Cl",
+      "diethyl_ether:C-O",
+      "diethyl_ether:methylene_C-H",
+      "dimethylamine:C-N",
+      "dimethylamine:N-H",
+      "dimethylamine:methyl_C-H",
+      "ethane:C-C",
+      "ethane:methyl_C-H",
+      "ethylene:vinylic_C-H",
+      "fluoromethane:C-F",
+      "fluoromethane:methyl_C-H",
+      "formamide:formyl_C-H",
+      "hydrazine:N-N",
+      "isobutylene:C-C",
+      "isobutylene:allylic_C-H",
+      "isobutylene:vinylic_C-H",
+      "methanethiol:C-S",
+      "methanethiol:S-H",
+      "methanethiol:methyl_C-H",
+      "neopentane:C-C",
+      "neopentane:methyl_C-H",
+      "propene:C-C",
+      "propene:allylic_C-H",
+      "vinyl_chloride:C-Cl"
+     ],
+     "no_plan": 19,
+     "plan_wall_min": 236.0,
+     "runs": [
+      "run_20261124_031156",
+      "run_20261124_054236",
+      "run_20261124_070930"
+     ]
+    },
+    {
+     "campaigns": 65,
+     "first_try_correct": 49,
+     "after_retry_correct": 52,
+     "wrong_plan_caught_by_oracle": 7,
+     "failure_classes": {
+      "wrong_parent": 4,
+      "no_plan": 9,
+      "wrong_bond": 3
+     },
+     "attempts": 531,
+     "format_failure_rate": 0.388,
+     "content_mistake_rate": 0.168,
+     "first_attempt_accept_by_module": {
+      "fragments": [
+       17,
+       62
+      ],
+      "method": [
+       54,
+       56
+      ],
+      "rationale": [
+       54,
+       56
+      ],
+      "target": [
+       36,
+       65
+      ]
+     },
+     "attempts_per_campaign": 8.2,
+     "by_bond_class": {
+      "C-H": [
+       21,
+       30
+      ],
+      "C-C": [
+       13,
+       14
+      ],
+      "C-Cl": [
+       7,
+       8
+      ],
+      "N-H": [
+       2,
+       4
+      ],
+      "C-N": [
+       0,
+       3
+      ],
+      "N-N": [
+       1,
+       1
+      ],
+      "C-O": [
+       1,
+       1
+      ],
+      "C-S": [
+       1,
+       1
+      ],
+      "S-H": [
+       1,
+       1
+      ],
+      "C-F": [
+       1,
+       1
+      ],
+      "C-Br": [
+       1,
+       1
+      ]
+     },
+     "tasks_correct": [
+      "1,3-butadiene:C-C",
+      "1-butene:C-C_bond_between_the_methine_group_and_the_methylene",
+      "1-butene:C-C_bond_between_the_methyl_group_and_the_methylene",
+      "1-butene:allylic_C-H",
+      "1-butene:methyl_C-H",
+      "acetamide:C-C",
+      "acetamide:N-H",
+      "acetamide:methyl_C-H",
+      "acetyl_chloride:C-Cl",
+      "benzene:aromatic_ring_C-H",
+      "bromoethane:C-Br",
+      "bromoethane:C-C",
+      "bromoethane:methyl_C-H",
+      "bromoethane:methylene_C-H",
+      "butanone:C-C_bond_between_the_carbonyl_group_and_the_methyl",
+      "butanone:C-C_bond_between_the_carbonyl_group_and_the_methylene",
+      "butanone:C-C_bond_between_the_methyl_group_and_the_methylene",
+      "butanone:methyl_C-H_next_to_the_carbonyl",
+      "butanone:methylene_C-H",
+      "chlorobenzene:C-Cl",
+      "chloroethane:C-Cl",
+      "chloroform:C-Cl",
+      "chloromethane:C-Cl",
+      "cyclohexene:allylic_C-H",
+      "cyclohexene:methylene_C-H",
+      "dichloromethane:C-Cl",
+      "diethyl_ether:C-C",
+      "diethyl_ether:C-O",
+      "diethyl_ether:methyl_C-H",
+      "dimethylamine:N-H",
+      "ethane:C-C",
+      "ethane:methyl_C-H",
+      "ethylene:vinylic_C-H",
+      "fluoromethane:C-F",
+      "fluoromethane:methyl_C-H",
+      "formamide:formyl_C-H",
+      "hydrazine:N-N",
+      "isobutylene:C-C",
+      "isobutylene:allylic_C-H",
+      "isobutylene:vinylic_C-H",
+      "methanethiol:C-S",
+      "methanethiol:S-H",
+      "methanethiol:methyl_C-H",
+      "neopentane:methyl_C-H",
+      "propene:C-C",
+      "propene:allylic_C-H",
+      "styrene:C-C",
+      "styrene:meta_ring_C-H",
+      "vinyl_chloride:C-Cl"
+     ],
+     "no_plan": 9,
+     "plan_wall_min": 209.5,
+     "runs": [
+      "run_20261124_031159",
+      "run_20261124_051129",
+      "run_20261124_064440"
+     ]
+    }
+   ]
+  },
+  "REF_base_critic": {
+   "first_try_correct": {
+    "mean": 40,
+    "min": 40,
+    "max": 40,
+    "values": [
+     40
+    ]
+   },
+   "after_retry_correct": {
+    "mean": 41,
+    "min": 41,
+    "max": 41,
+    "values": [
+     41
+    ]
+   },
+   "wrong_plan_caught_by_oracle": {
+    "mean": 1,
+    "min": 1,
+    "max": 1,
+    "values": [
+     1
+    ]
+   },
+   "no_plan": {
+    "mean": 24,
+    "min": 24,
+    "max": 24,
+    "values": [
+     24
+    ]
+   },
+   "format_failure_rate": {
+    "mean": 0.588,
+    "min": 0.588,
+    "max": 0.588,
+    "values": [
+     0.588
+    ]
+   },
+   "content_mistake_rate": {
+    "mean": 0.119,
+    "min": 0.119,
+    "max": 0.119,
+    "values": [
+     0.119
+    ]
+   },
+   "attempts_per_campaign": {
+    "mean": 10.3,
+    "min": 10.3,
+    "max": 10.3,
+    "values": [
+     10.3
+    ]
+   },
+   "plan_wall_min": {
+    "mean": 219.3,
+    "min": 219.3,
+    "max": 219.3,
+    "values": [
+     219.3
+    ]
+   },
+   "first_attempt_accept_by_module": {
+    "fragments": [
+     18,
+     59
+    ],
+    "method": [
+     40,
+     41
+    ],
+    "rationale": [
+     34,
+     41
+    ],
+    "target": [
+     30,
+     65
+    ]
+   },
+   "by_bond_class": {
+    "C-Br": [
+     1,
+     1
+    ],
+    "C-C": [
+     6,
+     14
+    ],
+    "C-Cl": [
+     7,
+     8
+    ],
+    "C-F": [
+     1,
+     1
+    ],
+    "C-H": [
+     19,
+     30
+    ],
+    "C-N": [
+     0,
+     3
+    ],
+    "C-O": [
+     1,
+     1
+    ],
+    "C-S": [
+     1,
+     1
+    ],
+    "N-H": [
+     2,
+     4
+    ],
+    "N-N": [
+     1,
+     1
+    ],
+    "S-H": [
+     1,
+     1
+    ]
+   },
+   "failure_classes_total": {
+    "no_plan": 24,
+    "wrong_bond": 1
+   },
+   "always_correct": 40,
+   "solved_by_any": 40,
+   "repeats": [
+    {
+     "campaigns": 65,
+     "first_try_correct": 40,
+     "after_retry_correct": 41,
+     "wrong_plan_caught_by_oracle": 1,
+     "failure_classes": {
+      "no_plan": 24,
+      "wrong_bond": 1
+     },
+     "attempts": 665,
+     "format_failure_rate": 0.588,
+     "content_mistake_rate": 0.119,
+     "first_attempt_accept_by_module": {
+      "fragments": [
+       18,
+       59
+      ],
+      "method": [
+       40,
+       41
+      ],
+      "rationale": [
+       34,
+       41
+      ],
+      "target": [
+       30,
+       65
+      ]
+     },
+     "attempts_per_campaign": 10.3,
+     "by_bond_class": {
+      "C-H": [
+       19,
+       30
+      ],
+      "C-C": [
+       6,
+       14
+      ],
+      "C-Cl": [
+       7,
+       8
+      ],
+      "N-H": [
+       2,
+       4
+      ],
+      "C-N": [
+       0,
+       3
+      ],
+      "N-N": [
+       1,
+       1
+      ],
+      "C-O": [
+       1,
+       1
+      ],
+      "C-S": [
+       1,
+       1
+      ],
+      "S-H": [
+       1,
+       1
+      ],
+      "C-F": [
+       1,
+       1
+      ],
+      "C-Br": [
+       1,
+       1
+      ]
+     },
+     "tasks_correct": [
+      "1-butene:C-C_bond_between_the_methine_group_and_the_methylene",
+      "1-butene:methyl_C-H",
+      "acetamide:C-C",
+      "acetamide:N-H",
+      "acetamide:methyl_C-H",
+      "benzene:aromatic_ring_C-H",
+      "benzyl_chloride:C-Cl",
+      "bromoethane:C-Br",
+      "bromoethane:C-C",
+      "bromoethane:methyl_C-H",
+      "bromoethane:methylene_C-H",
+      "butanone:C-C_bond_between_the_methyl_group_and_the_methylene",
+      "butanone:methyl_C-H_next_to_the_carbonyl",
+      "chlorobenzene:C-Cl",
+      "chloroethane:C-Cl",
+      "chloroform:C-Cl",
+      "chloromethane:C-Cl",
+      "cyclohexene:methylene_C-H",
+      "dichloromethane:C-Cl",
+      "diethyl_ether:C-O",
+      "diethyl_ether:methyl_C-H",
+      "diethyl_ether:methylene_C-H",
+      "dimethylamine:methyl_C-H",
+      "ethane:C-C",
+      "ethane:methyl_C-H",
+      "fluoromethane:C-F",
+      "fluoromethane:methyl_C-H",
+      "hydrazine:N-H",
+      "hydrazine:N-N",
+      "isobutylene:vinylic_C-H",
+      "methanethiol:C-S",
+      "methanethiol:S-H",
+      "methanethiol:methyl_C-H",
+      "neopentane:C-C",
+      "neopentane:methyl_C-H",
+      "propene:allylic_C-H",
+      "pyridine:ring_C-H_at_the_2-position",
+      "pyridine:ring_C-H_at_the_3-position",
+      "styrene:para_ring_C-H",
+      "vinyl_chloride:C-Cl"
+     ],
+     "no_plan": 24,
+     "plan_wall_min": 219.3,
+     "runs": [
+      "run_20261123_014921",
+      "run_20261123_014926",
+      "run_20261122_222823"
+     ]
+    }
+   ]
+  },
+  "REF_ft1_critic": {
+   "first_try_correct": {
+    "mean": 50,
+    "min": 50,
+    "max": 50,
+    "values": [
+     50
+    ]
+   },
+   "after_retry_correct": {
+    "mean": 52,
+    "min": 52,
+    "max": 52,
+    "values": [
+     52
+    ]
+   },
+   "wrong_plan_caught_by_oracle": {
+    "mean": 4,
+    "min": 4,
+    "max": 4,
+    "values": [
+     4
+    ]
+   },
+   "no_plan": {
+    "mean": 11,
+    "min": 11,
+    "max": 11,
+    "values": [
+     11
+    ]
+   },
+   "format_failure_rate": {
+    "mean": 0.385,
+    "min": 0.385,
+    "max": 0.385,
+    "values": [
+     0.385
+    ]
+   },
+   "content_mistake_rate": {
+    "mean": 0.153,
+    "min": 0.153,
+    "max": 0.153,
+    "values": [
+     0.153
+    ]
+   },
+   "attempts_per_campaign": {
+    "mean": 9.3,
+    "min": 9.3,
+    "max": 9.3,
+    "values": [
+     9.3
+    ]
+   },
+   "plan_wall_min": {
+    "mean": 187.7,
+    "min": 187.7,
+    "max": 187.7,
+    "values": [
+     187.7
+    ]
+   },
+   "first_attempt_accept_by_module": {
+    "fragments": [
+     20,
+     62
+    ],
+    "method": [
+     48,
+     54
+    ],
+    "rationale": [
+     36,
+     54
+    ],
+    "target": [
+     26,
+     65
+    ]
+   },
+   "by_bond_class": {
+    "C-Br": [
+     1,
+     1
+    ],
+    "C-C": [
+     10,
+     14
+    ],
+    "C-Cl": [
+     7,
+     8
+    ],
+    "C-F": [
+     1,
+     1
+    ],
+    "C-H": [
+     22,
+     30
+    ],
+    "C-N": [
+     2,
+     3
+    ],
+    "C-O": [
+     1,
+     1
+    ],
+    "C-S": [
+     1,
+     1
+    ],
+    "N-H": [
+     3,
+     4
+    ],
+    "N-N": [
+     1,
+     1
+    ],
+    "S-H": [
+     1,
+     1
+    ]
+   },
+   "failure_classes_total": {
+    "no_plan": 11,
+    "wrong_parent": 1,
+    "wrong_bond": 3
+   },
+   "always_correct": 50,
+   "solved_by_any": 50,
+   "repeats": [
+    {
+     "campaigns": 65,
+     "first_try_correct": 50,
+     "after_retry_correct": 52,
+     "wrong_plan_caught_by_oracle": 4,
+     "failure_classes": {
+      "no_plan": 11,
+      "wrong_parent": 1,
+      "wrong_bond": 3
+     },
+     "attempts": 603,
+     "format_failure_rate": 0.385,
+     "content_mistake_rate": 0.153,
+     "first_attempt_accept_by_module": {
+      "fragments": [
+       20,
+       62
+      ],
+      "method": [
+       48,
+       54
+      ],
+      "rationale": [
+       36,
+       54
+      ],
+      "target": [
+       26,
+       65
+      ]
+     },
+     "attempts_per_campaign": 9.3,
+     "by_bond_class": {
+      "C-H": [
+       22,
+       30
+      ],
+      "C-C": [
+       10,
+       14
+      ],
+      "C-Cl": [
+       7,
+       8
+      ],
+      "N-H": [
+       3,
+       4
+      ],
+      "C-N": [
+       2,
+       3
+      ],
+      "N-N": [
+       1,
+       1
+      ],
+      "C-O": [
+       1,
+       1
+      ],
+      "C-S": [
+       1,
+       1
+      ],
+      "S-H": [
+       1,
+       1
+      ],
+      "C-F": [
+       1,
+       1
+      ],
+      "C-Br": [
+       1,
+       1
+      ]
+     },
+     "tasks_correct": [
+      "1,3-butadiene:C-C",
+      "1-butene:C-C_bond_between_the_methine_group_and_the_methylene",
+      "1-butene:C-C_bond_between_the_methyl_group_and_the_methylene",
+      "1-butene:allylic_C-H",
+      "1-butene:methyl_C-H",
+      "acetamide:C-C",
+      "acetamide:C-N",
+      "acetamide:N-H",
+      "acetamide:methyl_C-H",
+      "benzene:aromatic_ring_C-H",
+      "benzyl_chloride:C-Cl",
+      "bromoethane:C-Br",
+      "bromoethane:C-C",
+      "bromoethane:methyl_C-H",
+      "bromoethane:methylene_C-H",
+      "butanone:C-C_bond_between_the_carbonyl_group_and_the_methyl",
+      "butanone:C-C_bond_between_the_methyl_group_and_the_methylene",
+      "butanone:methyl_C-H_next_to_the_carbonyl",
+      "butanone:methylene_C-H",
+      "chlorobenzene:C-Cl",
+      "chloroethane:C-Cl",
+      "chloroform:C-Cl",
+      "chloromethane:C-Cl",
+      "cyclohexene:methylene_C-H",
+      "cyclohexene:vinylic_C-H",
+      "dichloromethane:C-Cl",
+      "diethyl_ether:C-O",
+      "diethyl_ether:methylene_C-H",
+      "dimethylamine:C-N",
+      "dimethylamine:N-H",
+      "dimethylamine:methyl_C-H",
+      "ethane:C-C",
+      "ethane:methyl_C-H",
+      "ethylene:vinylic_C-H",
+      "fluoromethane:C-F",
+      "fluoromethane:methyl_C-H",
+      "hydrazine:N-H",
+      "hydrazine:N-N",
+      "isobutylene:allylic_C-H",
+      "isobutylene:vinylic_C-H",
+      "methanethiol:C-S",
+      "methanethiol:S-H",
+      "methanethiol:methyl_C-H",
+      "neopentane:C-C",
+      "neopentane:methyl_C-H",
+      "propene:C-C",
+      "propene:allylic_C-H",
+      "pyridine:ring_C-H_at_the_3-position",
+      "styrene:meta_ring_C-H",
+      "vinyl_chloride:C-Cl"
+     ],
+     "no_plan": 11,
+     "plan_wall_min": 187.7,
+     "runs": [
+      "run_20261123_085758",
+      "run_20261123_085802",
+      "run_20261123_085807"
+     ]
+    }
+   ]
+  }
+ },
+ "e2e": {
+  "A": {
+   "run": "run_20261123_224539",
+   "tasks": 17,
+   "plan_correct": 11,
+   "reports": 12,
+   "completed_correct": 11,
+   "species_tasks": 18,
+   "species_ok": 18,
+   "db_hits": 7,
+   "wall_min": {
+    "plan": 41.5,
+    "oracle": 0.0,
+    "compute": 0.4,
+    "assemble": 0.4
+   },
+   "rows": [
+    {
+     "task": "hydrazine:N-N",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 72.19
+    },
+    {
+     "task": "neopentane:C-C",
+     "plan_correct": false,
+     "error_class": "no_plan",
+     "scf_converged": 0,
+     "scf_not_converged": 0,
+     "report": false,
+     "status": "NO SPEC (planning FAILED (BashExitFailure: bash_app run_cmd failed with unix exit code 1))",
+     "results_verdict": null,
+     "bde_kcal": null
+    },
+    {
+     "task": "propene:allylic_C-H",
+     "plan_correct": false,
+     "error_class": "no_plan",
+     "scf_converged": 0,
+     "scf_not_converged": 0,
+     "report": false,
+     "status": "NO SPEC (planning FAILED (BashExitFailure: bash_app run_cmd failed with unix exit code 1))",
+     "results_verdict": null,
+     "bde_kcal": null
+    },
+    {
+     "task": "1-butene:methyl_C-H",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 108.68
+    },
+    {
+     "task": "1,3-butadiene:C-C",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 119.97
+    },
+    {
+     "task": "benzene:aromatic_ring_C-H",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 117.58
+    },
+    {
+     "task": "styrene:para_ring_C-H",
+     "plan_correct": false,
+     "error_class": "wrong_bond",
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 117.17
+    },
+    {
+     "task": "pyridine:ring_C-H_at_the_2-position",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 112.22
+    },
+    {
+     "task": "diethyl_ether:methyl_C-H",
+     "plan_correct": false,
+     "error_class": "no_plan",
+     "scf_converged": 0,
+     "scf_not_converged": 0,
+     "report": false,
+     "status": "NO SPEC (planning FAILED (BashExitFailure: bash_app run_cmd failed with unix exit code 1))",
+     "results_verdict": null,
+     "bde_kcal": null
+    },
+    {
+     "task": "butanone:C-C_bond_between_the_carbonyl_group_and_the_methylene",
+     "plan_correct": false,
+     "error_class": "no_plan",
+     "scf_converged": 0,
+     "scf_not_converged": 0,
+     "report": false,
+     "status": "NO SPEC (planning FAILED (BashExitFailure: bash_app run_cmd failed with unix exit code 1))",
+     "results_verdict": null,
+     "bde_kcal": null
+    },
+    {
+     "task": "acetyl_chloride:C-Cl",
+     "plan_correct": false,
+     "error_class": "no_plan",
+     "scf_converged": 0,
+     "scf_not_converged": 0,
+     "report": false,
+     "status": "NO SPEC (planning FAILED (BashExitFailure: bash_app run_cmd failed with unix exit code 1))",
+     "results_verdict": null,
+     "bde_kcal": null
+    },
+    {
+     "task": "acetamide:N-H",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 116.61
+    },
+    {
+     "task": "dimethylamine:C-N",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 85.99
+    },
+    {
+     "task": "methanethiol:methyl_C-H",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 103.06
+    },
+    {
+     "task": "chloromethane:C-Cl",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 84.24
+    },
+    {
+     "task": "bromoethane:C-C",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 95.21
+    },
+    {
+     "task": "vinyl_chloride:C-Cl",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 93.16
+    }
+   ]
+  },
+  "B": {
+   "run": "run_20261124_014549",
+   "tasks": 17,
+   "plan_correct": 12,
+   "reports": 14,
+   "completed_correct": 12,
+   "species_tasks": 20,
+   "species_ok": 20,
+   "db_hits": 13,
+   "wall_min": {
+    "plan": 50.9,
+    "oracle": 0.0,
+    "compute": 0.5,
+    "assemble": 0.4
+   },
+   "rows": [
+    {
+     "task": "hydrazine:N-N",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 72.19
+    },
+    {
+     "task": "neopentane:C-C",
+     "plan_correct": false,
+     "error_class": "no_plan",
+     "scf_converged": 0,
+     "scf_not_converged": 0,
+     "report": false,
+     "status": "NO SPEC (planning FAILED (BashExitFailure: bash_app run_cmd failed with unix exit code 1))",
+     "results_verdict": null,
+     "bde_kcal": null
+    },
+    {
+     "task": "propene:allylic_C-H",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 90.85
+    },
+    {
+     "task": "1-butene:methyl_C-H",
+     "plan_correct": false,
+     "error_class": "no_plan",
+     "scf_converged": 0,
+     "scf_not_converged": 0,
+     "report": false,
+     "status": "NO SPEC (planning FAILED (BashExitFailure: bash_app run_cmd failed with unix exit code 1))",
+     "results_verdict": null,
+     "bde_kcal": null
+    },
+    {
+     "task": "1,3-butadiene:C-C",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 119.97
+    },
+    {
+     "task": "benzene:aromatic_ring_C-H",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 117.58
+    },
+    {
+     "task": "styrene:para_ring_C-H",
+     "plan_correct": false,
+     "error_class": "no_plan",
+     "scf_converged": 0,
+     "scf_not_converged": 0,
+     "report": false,
+     "status": "NO SPEC (planning FAILED (BashExitFailure: bash_app run_cmd failed with unix exit code 1))",
+     "results_verdict": null,
+     "bde_kcal": null
+    },
+    {
+     "task": "pyridine:ring_C-H_at_the_2-position",
+     "plan_correct": false,
+     "error_class": "wrong_bond",
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 118.28
+    },
+    {
+     "task": "diethyl_ether:methyl_C-H",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 108.45
+    },
+    {
+     "task": "butanone:C-C_bond_between_the_carbonyl_group_and_the_methylene",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 82.48
+    },
+    {
+     "task": "acetyl_chloride:C-Cl",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 81.73
+    },
+    {
+     "task": "acetamide:N-H",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 116.61
+    },
+    {
+     "task": "dimethylamine:C-N",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 86.11
+    },
+    {
+     "task": "methanethiol:methyl_C-H",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 103.04
+    },
+    {
+     "task": "chloromethane:C-Cl",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 82.76
+    },
+    {
+     "task": "bromoethane:C-C",
+     "plan_correct": true,
+     "error_class": null,
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 95.21
+    },
+    {
+     "task": "vinyl_chloride:C-Cl",
+     "plan_correct": false,
+     "error_class": "wrong_parent",
+     "scf_converged": 3,
+     "scf_not_converged": 0,
+     "report": true,
+     "status": "COMPLETED",
+     "results_verdict": "PASS",
+     "bde_kcal": 64.37
+    }
+   ]
+  }
+ },
+ "paired": {
+  "BA": [
+   14,
+   17,
+   0.72
+  ],
+  "CA": [
+   13,
+   17,
+   0.58
+  ],
+  "BC": [
+   12,
+   14,
+   0.85
+  ]
+ },
+ "per_task": {
+  "A": {
+   "hydrazine:N-N": 3,
+   "hydrazine:N-H": 3,
+   "ethane:C-C": 3,
+   "ethane:methyl_C-H": 3,
+   "neopentane:C-C": 1,
+   "neopentane:methyl_C-H": 2,
+   "ethylene:vinylic_C-H": 3,
+   "propene:C-C": 3,
+   "propene:allylic_C-H": 3,
+   "1-butene:C-C_bond_between_the_methine_group_and_the_methylene": 3,
+   "1-butene:C-C_bond_between_the_methyl_group_and_the_methylene": 2,
+   "1-butene:allylic_C-H": 0,
+   "1-butene:methyl_C-H": 3,
+   "isobutylene:C-C": 0,
+   "isobutylene:vinylic_C-H": 2,
+   "isobutylene:allylic_C-H": 2,
+   "1,3-butadiene:C-C": 3,
+   "cyclohexene:vinylic_C-H": 0,
+   "cyclohexene:allylic_C-H": 0,
+   "cyclohexene:methylene_C-H": 3,
+   "benzene:aromatic_ring_C-H": 3,
+   "styrene:C-C": 2,
+   "styrene:ortho_ring_C-H": 0,
+   "styrene:meta_ring_C-H": 0,
+   "styrene:para_ring_C-H": 2,
+   "chlorobenzene:C-Cl": 3,
+   "pyridine:ring_C-H_at_the_4-position": 1,
+   "pyridine:ring_C-H_at_the_3-position": 0,
+   "pyridine:ring_C-H_at_the_2-position": 1,
+   "benzyl_chloride:C-Cl": 3,
+   "diethyl_ether:C-C": 1,
+   "diethyl_ether:C-O": 2,
+   "diethyl_ether:methyl_C-H": 2,
+   "diethyl_ether:methylene_C-H": 3,
+   "tetrahydrofuran:methylene_C-H_on_the_oxygen": 0,
+   "butanone:C-C_bond_between_the_methyl_group_and_the_methylene": 1,
+   "butanone:C-C_bond_between_the_carbonyl_group_and_the_methylene": 3,
+   "butanone:C-C_bond_between_the_carbonyl_group_and_the_methyl": 1,
+   "butanone:methylene_C-H": 3,
+   "butanone:methyl_C-H_next_to_the_carbonyl": 1,
+   "acetyl_chloride:C-Cl": 2,
+   "acetamide:C-C": 3,
+   "acetamide:C-N": 3,
+   "acetamide:methyl_C-H": 3,
+   "acetamide:N-H": 3,
+   "formamide:C-N": 1,
+   "formamide:N-H": 1,
+   "formamide:formyl_C-H": 0,
+   "dimethylamine:C-N": 3,
+   "dimethylamine:methyl_C-H": 2,
+   "dimethylamine:N-H": 3,
+   "methanethiol:C-S": 3,
+   "methanethiol:methyl_C-H": 3,
+   "methanethiol:S-H": 3,
+   "fluoromethane:C-F": 3,
+   "fluoromethane:methyl_C-H": 3,
+   "chloromethane:C-Cl": 3,
+   "dichloromethane:C-Cl": 3,
+   "chloroform:C-Cl": 3,
+   "chloroethane:C-Cl": 3,
+   "bromoethane:C-C": 3,
+   "bromoethane:C-Br": 3,
+   "bromoethane:methyl_C-H": 2,
+   "bromoethane:methylene_C-H": 3,
+   "vinyl_chloride:C-Cl": 3
+  },
+  "B": {
+   "hydrazine:N-N": 3,
+   "hydrazine:N-H": 1,
+   "ethane:C-C": 3,
+   "ethane:methyl_C-H": 3,
+   "neopentane:C-C": 3,
+   "neopentane:methyl_C-H": 3,
+   "ethylene:vinylic_C-H": 3,
+   "propene:C-C": 3,
+   "propene:allylic_C-H": 3,
+   "1-butene:C-C_bond_between_the_methine_group_and_the_methylene": 1,
+   "1-butene:C-C_bond_between_the_methyl_group_and_the_methylene": 0,
+   "1-butene:allylic_C-H": 2,
+   "1-butene:methyl_C-H": 2,
+   "isobutylene:C-C": 0,
+   "isobutylene:vinylic_C-H": 3,
+   "isobutylene:allylic_C-H": 3,
+   "1,3-butadiene:C-C": 2,
+   "cyclohexene:vinylic_C-H": 1,
+   "cyclohexene:allylic_C-H": 1,
+   "cyclohexene:methylene_C-H": 1,
+   "benzene:aromatic_ring_C-H": 3,
+   "styrene:C-C": 2,
+   "styrene:ortho_ring_C-H": 0,
+   "styrene:meta_ring_C-H": 2,
+   "styrene:para_ring_C-H": 0,
+   "chlorobenzene:C-Cl": 3,
+   "pyridine:ring_C-H_at_the_4-position": 0,
+   "pyridine:ring_C-H_at_the_3-position": 3,
+   "pyridine:ring_C-H_at_the_2-position": 1,
+   "benzyl_chloride:C-Cl": 2,
+   "diethyl_ether:C-C": 1,
+   "diethyl_ether:C-O": 3,
+   "diethyl_ether:methyl_C-H": 2,
+   "diethyl_ether:methylene_C-H": 1,
+   "tetrahydrofuran:methylene_C-H_on_the_oxygen": 1,
+   "butanone:C-C_bond_between_the_methyl_group_and_the_methylene": 1,
+   "butanone:C-C_bond_between_the_carbonyl_group_and_the_methylene": 1,
+   "butanone:C-C_bond_between_the_carbonyl_group_and_the_methyl": 1,
+   "butanone:methylene_C-H": 3,
+   "butanone:methyl_C-H_next_to_the_carbonyl": 3,
+   "acetyl_chloride:C-Cl": 2,
+   "acetamide:C-C": 3,
+   "acetamide:C-N": 3,
+   "acetamide:methyl_C-H": 3,
+   "acetamide:N-H": 3,
+   "formamide:C-N": 0,
+   "formamide:N-H": 0,
+   "formamide:formyl_C-H": 1,
+   "dimethylamine:C-N": 1,
+   "dimethylamine:methyl_C-H": 2,
+   "dimethylamine:N-H": 2,
+   "methanethiol:C-S": 3,
+   "methanethiol:methyl_C-H": 3,
+   "methanethiol:S-H": 3,
+   "fluoromethane:C-F": 3,
+   "fluoromethane:methyl_C-H": 3,
+   "chloromethane:C-Cl": 3,
+   "dichloromethane:C-Cl": 3,
+   "chloroform:C-Cl": 2,
+   "chloroethane:C-Cl": 3,
+   "bromoethane:C-C": 3,
+   "bromoethane:C-Br": 3,
+   "bromoethane:methyl_C-H": 3,
+   "bromoethane:methylene_C-H": 3,
+   "vinyl_chloride:C-Cl": 2
+  },
+  "C": {
+   "hydrazine:N-N": 2,
+   "hydrazine:N-H": 1,
+   "ethane:C-C": 3,
+   "ethane:methyl_C-H": 3,
+   "neopentane:C-C": 2,
+   "neopentane:methyl_C-H": 3,
+   "ethylene:vinylic_C-H": 3,
+   "propene:C-C": 3,
+   "propene:allylic_C-H": 3,
+   "1-butene:C-C_bond_between_the_methine_group_and_the_methylene": 2,
+   "1-butene:C-C_bond_between_the_methyl_group_and_the_methylene": 2,
+   "1-butene:allylic_C-H": 1,
+   "1-butene:methyl_C-H": 3,
+   "isobutylene:C-C": 2,
+   "isobutylene:vinylic_C-H": 3,
+   "isobutylene:allylic_C-H": 2,
+   "1,3-butadiene:C-C": 2,
+   "cyclohexene:vinylic_C-H": 0,
+   "cyclohexene:allylic_C-H": 2,
+   "cyclohexene:methylene_C-H": 3,
+   "benzene:aromatic_ring_C-H": 3,
+   "styrene:C-C": 2,
+   "styrene:ortho_ring_C-H": 0,
+   "styrene:meta_ring_C-H": 1,
+   "styrene:para_ring_C-H": 0,
+   "chlorobenzene:C-Cl": 3,
+   "pyridine:ring_C-H_at_the_4-position": 0,
+   "pyridine:ring_C-H_at_the_3-position": 0,
+   "pyridine:ring_C-H_at_the_2-position": 0,
+   "benzyl_chloride:C-Cl": 2,
+   "diethyl_ether:C-C": 2,
+   "diethyl_ether:C-O": 3,
+   "diethyl_ether:methyl_C-H": 2,
+   "diethyl_ether:methylene_C-H": 2,
+   "tetrahydrofuran:methylene_C-H_on_the_oxygen": 0,
+   "butanone:C-C_bond_between_the_methyl_group_and_the_methylene": 3,
+   "butanone:C-C_bond_between_the_carbonyl_group_and_the_methylene": 1,
+   "butanone:C-C_bond_between_the_carbonyl_group_and_the_methyl": 3,
+   "butanone:methylene_C-H": 2,
+   "butanone:methyl_C-H_next_to_the_carbonyl": 3,
+   "acetyl_chloride:C-Cl": 2,
+   "acetamide:C-C": 3,
+   "acetamide:C-N": 2,
+   "acetamide:methyl_C-H": 3,
+   "acetamide:N-H": 3,
+   "formamide:C-N": 1,
+   "formamide:N-H": 0,
+   "formamide:formyl_C-H": 3,
+   "dimethylamine:C-N": 2,
+   "dimethylamine:methyl_C-H": 2,
+   "dimethylamine:N-H": 3,
+   "methanethiol:C-S": 3,
+   "methanethiol:methyl_C-H": 3,
+   "methanethiol:S-H": 3,
+   "fluoromethane:C-F": 3,
+   "fluoromethane:methyl_C-H": 3,
+   "chloromethane:C-Cl": 3,
+   "dichloromethane:C-Cl": 3,
+   "chloroform:C-Cl": 2,
+   "chloroethane:C-Cl": 3,
+   "bromoethane:C-C": 3,
+   "bromoethane:C-Br": 3,
+   "bromoethane:methyl_C-H": 1,
+   "bromoethane:methylene_C-H": 3,
+   "vinyl_chloride:C-Cl": 2
+  }
+ }
+}
