@@ -164,6 +164,7 @@ def main():
     ap.add_argument("--beta", type=float, default=0.1)
     ap.add_argument("--sft-alpha", type=float, default=0.2)
     ap.add_argument("--max-gib", type=int, default=52)
+    ap.add_argument("--init-adapter", default=None, help="start from this LoRA adapter instead of a new one")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     log = Log(os.path.join(a.out, "train_log.jsonl"))
@@ -174,8 +175,12 @@ def main():
     model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
     model.enable_input_require_grads()
     model.config.use_cache = False
-    model = get_peft_model(model, LoraConfig(r=a.rank, lora_alpha=2 * a.rank, lora_dropout=0.05,
-                                             target_modules=TARGETS, task_type="CAUSAL_LM"))
+    if a.init_adapter:   # continue from an earlier stage's adapter (e.g. DPO after an SFT-only job)
+        from peft import PeftModel
+        model = PeftModel.from_pretrained(model, a.init_adapter, is_trainable=True)
+    else:
+        model = get_peft_model(model, LoraConfig(r=a.rank, lora_alpha=2 * a.rank, lora_dropout=0.05,
+                                                 target_modules=TARGETS, task_type="CAUSAL_LM"))
     dev = model.get_input_embeddings().weight.device
     sft, dpo = load_jsonl(a.sft), load_jsonl(a.dpo)
 

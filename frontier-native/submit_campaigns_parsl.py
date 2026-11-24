@@ -135,6 +135,9 @@ def parse_args() -> argparse.Namespace:
                    help="With --tasks: plan once more, with the oracle's hint, every task whose plan was wrong")
     p.add_argument("--plan-stage-only", action="store_true",
                    help="Stop after planning (and grading): no compute or assemble stage")
+    p.add_argument("--no-plan-critic", action="store_true",
+                   help="Plan board without the LLM plan critic: modules that pass the code checks are "
+                        "accepted, no final review (COMPCHEM_PLAN_CRITIC=off)")
     p.add_argument("--trace", action="store_true",
                    help="Record each LLM call's full prompt in its Flowcept record (COMPCHEM_TRACE=1)")
     p.add_argument("--lessons", default=None,
@@ -311,6 +314,7 @@ def main() -> None:
         *([f"export COMPCHEM_DB={shlex.quote(args.db)}"] if args.db else []),
         f"export COMPCHEM_RUN_ID={run_dir.name}",
         *(["export COMPCHEM_TRACE=1"] if args.trace else []),
+        *(["export COMPCHEM_PLAN_CRITIC=off"] if args.no_plan_critic else []),
         *([f"export COMPCHEM_LESSONS={shlex.quote(args.lessons)}"] if args.lessons else []),
         *([f"export COMPCHEM_PLAN_CRITIC_SKILL={shlex.quote(args.plan_critic_skill)}"]
           if args.plan_critic_skill else []),

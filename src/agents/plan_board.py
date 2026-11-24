@@ -67,6 +67,10 @@ def _tracing() -> bool:
     return os.environ.get("COMPCHEM_TRACE", "") not in ("", "0", "false")
 
 
+def _critic_off() -> bool:
+    return os.environ.get("COMPCHEM_PLAN_CRITIC", "").lower() in ("off", "0", "false", "no")
+
+
 def _lessons_block(module: str, question: str) -> str:
     """COMPCHEM_LESSONS=<lessons.jsonl>[:k] adds the k most relevant lessons
     from past mistakes for this module to the Planner's message."""
@@ -514,11 +518,12 @@ class PlanBoardModerator(Agent):
             crit = None
             if val["verdict"] == "PASS":
                 last_validated = entry_id
-                crit = await self.critic.evaluate(entry_id)
+                # COMPCHEM_PLAN_CRITIC=off: code checks only, no LLM review (for ablations)
+                crit = "OFF" if _critic_off() else await self.critic.evaluate(entry_id)
             self.rounds.append({"round": len(self.rounds) + 1, "module": module, "attempt": attempt,
                                 "validator": val["verdict"], "critic": crit, "signature": val["signature"]})
             await self._record_round(entry_id, val, crit)
-            if val["verdict"] == "PASS" and crit in ("ACCEPT", "ERROR"):
+            if val["verdict"] == "PASS" and crit in ("ACCEPT", "ERROR", "OFF"):
                 await self.board.accept(module, entry_id)
                 return True
             if val["verdict"] == "PASS":
@@ -586,7 +591,8 @@ class PlanBoardModerator(Agent):
                 return {"spec": None, "outcome": "assembled plan failed validation: "
                         + "; ".join(problems_as_text(full["fails"])), "rounds": self.rounds,
                         "supervisor": self.supervisor_log, "final_reviews": final_reviews, "board": snap}
-            review = await self.critic.final_review(raw)
+            review = ({"verdict": "ACCEPT", "reopen": [], "issues": []} if _critic_off()
+                      else await self.critic.final_review(raw))
             final_reviews.append(review)
             self.rounds.append({"round": len(self.rounds) + 1, "module": "final", "attempt": len(final_reviews),
                                 "validator": "PASS", "critic": review["verdict"], "signature": None})
